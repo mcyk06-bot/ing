@@ -816,6 +816,733 @@ function buildMegaCube(R2, H) {
 // ------------------------------------------
 
 /* ----------------------------------------------------------
+   New smart / inorganic / stylish objects
+---------------------------------------------------------- */
+
+function buildObelisk(R2, H) {
+  var g = new THREE.Group();
+  var h = 2.0 + R2() * 3.5;
+  var base = 0.18 + R2() * 0.12;
+  var cols = [0x080808, 0xf2eee8, 0xb0a080, 0x1c2c3c, 0x2a1a0a];
+  var mat = matStd(cols[Math.floor(R2() * cols.length)], 0.15 + R2() * 0.3, 0.4 + R2() * 0.4);
+  var body = mkMesh(new THREE.CylinderGeometry(0.025, base, h * 0.88, 4), mat);
+  body.position.y = h * 0.44; body.rotation.y = Math.PI / 4; g.add(body);
+  var tip = mkMesh(new THREE.CylinderGeometry(0, 0.07, h * 0.12, 4), mat.clone());
+  tip.position.y = h * 0.88 + h * 0.06; tip.rotation.y = Math.PI / 4; g.add(tip);
+  var plate = mkMesh(new THREE.BoxGeometry(base * 2.8, 0.07, base * 2.8), mat.clone());
+  plate.position.y = 0.035; g.add(plate);
+  var shd = mkMesh(new THREE.CircleGeometry(base * 1.8, 20),
+    new THREE.MeshStandardMaterial({ color: 0x000000, transparent: true, opacity: 0.14, roughness: 1, depthWrite: false }));
+  shd.rotation.x = -Math.PI / 2; shd.position.y = 0.005; g.add(shd);
+  return g;
+}
+
+function buildTorus(R2) {
+  var g = new THREE.Group();
+  var r = 0.55 + R2() * 1.3;
+  var tube = 0.045 + R2() * 0.1;
+  var cols = [0x0a0a0a, 0xd8d8d8, 0xc8a050, 0x2a4a6a, 0x5a1a1a];
+  var mat = matStd(cols[Math.floor(R2() * cols.length)], 0.1 + R2() * 0.3, 0.5 + R2() * 0.4);
+  var torus = mkMesh(new THREE.TorusGeometry(r, tube, 20, 80), mat);
+  torus.position.y = r + tube;
+  var tilt = Math.floor(R2() * 3);
+  if (tilt === 0) torus.rotation.x = Math.PI / 2;
+  else if (tilt === 1) { torus.rotation.x = Math.PI / 5; torus.rotation.z = Math.PI / 7; }
+  g.add(torus);
+  var shd = mkMesh(new THREE.CircleGeometry(r * 0.95, 24),
+    new THREE.MeshStandardMaterial({ color: 0x000000, transparent: true, opacity: 0.11, roughness: 1, depthWrite: false }));
+  shd.rotation.x = -Math.PI / 2; shd.position.y = 0.005; g.add(shd);
+  return g;
+}
+
+function buildNeonFrame(R2) {
+  var g = new THREE.Group();
+  var w = 0.9 + R2() * 1.6;
+  var h = 1.1 + R2() * 2.0;
+  var t = 0.04;
+  var neonColors = [0x00ffdd, 0xff0066, 0xffee00, 0x0088ff, 0xff4400, 0xcc00ff, 0x00ff88];
+  var col = neonColors[Math.floor(R2() * neonColors.length)];
+  var mat = new THREE.MeshStandardMaterial({
+    color: col, emissive: new THREE.Color(col),
+    emissiveIntensity: 3.0, roughness: 0.25, metalness: 0.4
+  });
+  var bars = [
+    [w + t*2, t, t, 0, h, 0],
+    [w + t*2, t, t, 0, 0, 0],
+    [t, h, t, -w/2, h/2, 0],
+    [t, h, t,  w/2, h/2, 0]
+  ];
+  bars.forEach(function(b) {
+    var m = mkMesh(new THREE.BoxGeometry(b[0], b[1], b[2]), mat.clone());
+    m.position.set(b[3], b[4], b[5]); g.add(m);
+  });
+  var pl = new THREE.PointLight(col, 2.2, 7.0, 2.0);
+  pl.position.set(0, h / 2, 0.4); g.add(pl);
+  return g;
+}
+
+function buildArch(R2, H) {
+  var g = new THREE.Group();
+  var w = 1.6 + R2() * 2.2;
+  var h = 1.8 + R2() * 2.5;
+  var t = 0.14 + R2() * 0.14;
+  var cols = [0xe0e0e0, 0x111111, 0xb8a888, 0x3a3a3a, 0xf5f0e8];
+  var mat = matStd(cols[Math.floor(R2() * cols.length)], 0.65, 0.05 + R2() * 0.2);
+  var lp = mkMesh(new THREE.BoxGeometry(t, h, t), mat);
+  lp.position.set(-w/2, h/2, 0); g.add(lp);
+  var rp = mkMesh(new THREE.BoxGeometry(t, h, t), mat.clone());
+  rp.position.set( w/2, h/2, 0); g.add(rp);
+  var archR = w / 2 + t / 2;
+  var arch = mkMesh(new THREE.TorusGeometry(archR, t / 2, 10, 40, Math.PI), mat.clone());
+  arch.position.set(0, h, 0); arch.rotation.z = Math.PI; g.add(arch);
+  var shd = mkMesh(new THREE.CircleGeometry(w * 0.65, 20),
+    new THREE.MeshStandardMaterial({ color: 0x000000, transparent: true, opacity: 0.12, roughness: 1, depthWrite: false }));
+  shd.rotation.x = -Math.PI / 2; shd.position.y = 0.005; g.add(shd);
+  return g;
+}
+
+function buildPyramid(R2) {
+  var g = new THREE.Group();
+  var base = 0.7 + R2() * 2.0;
+  var h = base * (0.75 + R2() * 1.3);
+  var cols = [0xf0ece4, 0x0a0a0a, 0xc8a850, 0x2a3a4a, 0x3a1a0a];
+  var mat = matStd(cols[Math.floor(R2() * cols.length)], 0.25 + R2() * 0.5, R2() * 0.5);
+  var pyr = mkMesh(new THREE.CylinderGeometry(0, base, h, 4), mat);
+  pyr.position.y = h / 2; pyr.rotation.y = Math.PI / 4; g.add(pyr);
+  var shd = mkMesh(new THREE.CircleGeometry(base * 1.1, 16),
+    new THREE.MeshStandardMaterial({ color: 0x000000, transparent: true, opacity: 0.14, roughness: 1, depthWrite: false }));
+  shd.rotation.x = -Math.PI / 2; shd.position.y = 0.005; g.add(shd);
+  return g;
+}
+
+function buildMirrorPillar(R2, H) {
+  var g = new THREE.Group();
+  var r = 0.12 + R2() * 0.2;
+  var h = 0.8 + R2() * (H - 1.0) * 0.75;
+  var shapeType = Math.floor(R2() * 3);
+  var mat = matStd(0x080808, 0.02, 0.98);
+  var geo;
+  if (shapeType === 0) geo = new THREE.CylinderGeometry(r, r, h, 32);
+  else if (shapeType === 1) geo = new THREE.BoxGeometry(r * 2, h, r * 2);
+  else geo = new THREE.CylinderGeometry(r, r, h, 6);
+  var pillar = mkMesh(geo, mat);
+  pillar.position.y = h / 2; g.add(pillar);
+  var cap = mkMesh(new THREE.CylinderGeometry(r * 1.25, r * 1.25, 0.05, 32),
+    matStd(0x060606, 0.02, 0.99));
+  cap.position.y = h + 0.025; g.add(cap);
+  var shd = mkMesh(new THREE.CircleGeometry(r * 1.8, 20),
+    new THREE.MeshStandardMaterial({ color: 0x000000, transparent: true, opacity: 0.22, roughness: 1, depthWrite: false }));
+  shd.rotation.x = -Math.PI / 2; shd.position.y = 0.005; g.add(shd);
+  return g;
+}
+
+function buildCrystal(R2) {
+  var g = new THREE.Group();
+  var r = 0.28 + R2() * 0.85;
+  var cols = [0xe0f4ff, 0xffe0f4, 0xf4ffe0, 0xffffff, 0xe8e0ff];
+  var mat = new THREE.MeshStandardMaterial({
+    color: cols[Math.floor(R2() * cols.length)],
+    roughness: 0.04, metalness: 0.08,
+    transparent: true, opacity: 0.72
+  });
+  var crystal = mkMesh(new THREE.OctahedronGeometry(r, 0), mat);
+  crystal.position.y = r + 0.1;
+  crystal.rotation.y = R2() * Math.PI;
+  crystal.rotation.x = R2() * 0.4;
+  g.add(crystal);
+  var pl = new THREE.PointLight(0xd0ecff, 1.4, r * 6, 2.0);
+  pl.position.y = r + 0.1; g.add(pl);
+  var shd = mkMesh(new THREE.CircleGeometry(r * 0.8, 16),
+    new THREE.MeshStandardMaterial({ color: 0x000000, transparent: true, opacity: 0.1, roughness: 1, depthWrite: false }));
+  shd.rotation.x = -Math.PI / 2; shd.position.y = 0.005; g.add(shd);
+  return g;
+}
+
+function buildStackedBoxes(R2) {
+  var g = new THREE.Group();
+  var n = 2 + Math.floor(R2() * 5);
+  var baseSize = 0.45 + R2() * 0.55;
+  var lightMat = matStd(0xe8e4dc, 0.82, 0.04);
+  var darkMat = matStd(0x111111, 0.78, 0.08);
+  var metalMat = matStd(0x888888, 0.2, 0.9);
+  var mats = [lightMat, darkMat, metalMat];
+  var y = 0;
+  for (var i = 0; i < n; i++) {
+    var sz = baseSize * (1.0 - i * 0.06);
+    var bh = sz * (0.5 + R2() * 0.7);
+    var box = mkMesh(new THREE.BoxGeometry(sz, bh, sz * (0.6 + R2() * 0.6)),
+      mats[Math.floor(R2() * mats.length)].clone());
+    box.position.y = y + bh / 2;
+    box.rotation.y = R2() * Math.PI;
+    g.add(box); y += bh;
+  }
+  var shd = mkMesh(new THREE.CircleGeometry(baseSize * 0.9, 16),
+    new THREE.MeshStandardMaterial({ color: 0x000000, transparent: true, opacity: 0.14, roughness: 1, depthWrite: false }));
+  shd.rotation.x = -Math.PI / 2; shd.position.y = 0.005; g.add(shd);
+  return g;
+}
+
+function buildPendulum(R2, H) {
+  var g = new THREE.Group();
+  var pendH = H * (0.45 + R2() * 0.45);
+  var mat = matStd(0x606060, 0.35, 0.85);
+  var rod = mkMesh(new THREE.CylinderGeometry(0.012, 0.012, pendH, 8), mat);
+  rod.position.y = H - pendH / 2; g.add(rod);
+  var bobType = Math.floor(R2() * 3);
+  var bobMat = matStd(0x060606, 0.04, 0.96);
+  var bob;
+  if (bobType === 0) bob = mkMesh(new THREE.SphereGeometry(0.14 + R2() * 0.22, 28, 18), bobMat);
+  else if (bobType === 1) { bob = mkMesh(new THREE.BoxGeometry(0.22, 0.22, 0.22), bobMat); bob.rotation.y = Math.PI/4; bob.rotation.x = Math.PI/8; }
+  else bob = mkMesh(new THREE.OctahedronGeometry(0.18 + R2() * 0.14, 0), bobMat);
+  bob.position.y = H - pendH - 0.15; g.add(bob);
+  var pl = new THREE.PointLight(0xfff8f0, 0.7, 3.5, 2.0);
+  pl.position.y = H - pendH - 0.15; g.add(pl);
+  return g;
+}
+
+function buildWireframeCube(R2) {
+  var g = new THREE.Group();
+  var sz = 0.55 + R2() * 1.6;
+  var cubeGeo = new THREE.BoxGeometry(sz, sz, sz);
+  var edges = new THREE.EdgesGeometry(cubeGeo);
+  var lineMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.55 });
+  var wf = new THREE.LineSegments(edges, lineMat);
+  wf.position.y = sz / 2 + 0.25 + R2() * 0.5;
+  wf.rotation.x = R2() * Math.PI; wf.rotation.z = R2() * Math.PI;
+  g.add(wf);
+  var ped = mkMesh(new THREE.CylinderGeometry(0.13, 0.13, 0.25, 16),
+    matStd(0x111111, 0.85, 0.1));
+  ped.position.y = 0.125; g.add(ped);
+  var shd = mkMesh(new THREE.CircleGeometry(0.3, 16),
+    new THREE.MeshStandardMaterial({ color: 0x000000, transparent: true, opacity: 0.12, roughness: 1, depthWrite: false }));
+  shd.rotation.x = -Math.PI / 2; shd.position.y = 0.005; g.add(shd);
+  return g;
+}
+
+function buildGridPanel(R2, H) {
+  var g = new THREE.Group();
+  var pw = 1.4 + R2() * 2.0;
+  var ph = 1.2 + R2() * 2.5;
+  var cols = 6 + Math.floor(R2() * 8);
+  var rows = Math.ceil(cols * ph / pw);
+  var cw = pw / cols, rh = ph / rows;
+  var mat = new THREE.LineBasicMaterial({ color: 0xdddddd, transparent: true, opacity: 0.4 });
+  var points = [];
+  var i;
+  for (i = 0; i <= cols; i++) {
+    points.push(new THREE.Vector3(-pw/2 + i*cw, -ph/2, 0));
+    points.push(new THREE.Vector3(-pw/2 + i*cw,  ph/2, 0));
+  }
+  for (i = 0; i <= rows; i++) {
+    points.push(new THREE.Vector3(-pw/2, -ph/2 + i*rh, 0));
+    points.push(new THREE.Vector3( pw/2, -ph/2 + i*rh, 0));
+  }
+  var geo = new THREE.BufferGeometry().setFromPoints(points);
+  var grid = new THREE.LineSegments(geo, mat);
+  grid.position.y = ph / 2 + 0.05;
+  g.add(grid);
+  // Thin frame
+  var frameMat = matStd(0x2a2a2a, 0.6, 0.5);
+  var frame = mkMesh(new THREE.BoxGeometry(pw + 0.04, ph + 0.04, 0.02), frameMat);
+  frame.position.y = ph / 2 + 0.05; g.add(frame);
+  return g;
+}
+
+function buildOrb(R2, H) {
+  // Glowing orb elevated on a pedestal
+  var g = new THREE.Group();
+  var pedH = 0.8 + R2() * 1.2;
+  var pedR = 0.1 + R2() * 0.08;
+  var orbR = 0.18 + R2() * 0.3;
+  var pedMat = matStd(0x1a1a1a, 0.7, 0.2);
+  var ped = mkMesh(new THREE.CylinderGeometry(pedR, pedR * 1.5, pedH, 24), pedMat);
+  ped.position.y = pedH / 2; g.add(ped);
+  var capMat = matStd(0x0d0d0d, 0.5, 0.3);
+  var cap = mkMesh(new THREE.CylinderGeometry(orbR * 1.1, pedR, 0.06, 24), capMat);
+  cap.position.y = pedH; g.add(cap);
+  var orbCols = [0x00ffcc, 0xff4488, 0xffdd00, 0x4488ff, 0xff8800];
+  var col = orbCols[Math.floor(R2() * orbCols.length)];
+  var orbMat = new THREE.MeshStandardMaterial({
+    color: col, emissive: new THREE.Color(col),
+    emissiveIntensity: 1.8, roughness: 0.1, metalness: 0.0,
+    transparent: true, opacity: 0.88
+  });
+  var orb = mkMesh(new THREE.SphereGeometry(orbR, 28, 20), orbMat);
+  orb.position.y = pedH + orbR + 0.04; g.add(orb);
+  var pl = new THREE.PointLight(col, 3.0, orbR * 18, 2.0);
+  pl.position.y = pedH + orbR + 0.04; g.add(pl);
+  var shd = mkMesh(new THREE.CircleGeometry(pedR * 2.5, 16),
+    new THREE.MeshStandardMaterial({ color: 0x000000, transparent: true, opacity: 0.2, roughness: 1, depthWrite: false }));
+  shd.rotation.x = -Math.PI / 2; shd.position.y = 0.005; g.add(shd);
+  return g;
+}
+
+function buildSlab(R2) {
+  // Minimal altar / floating slab
+  var g = new THREE.Group();
+  var w = 1.2 + R2() * 2.5;
+  var d = 0.6 + R2() * 1.0;
+  var h = 0.08 + R2() * 0.1;
+  var pedH = 0.6 + R2() * 1.0;
+  var cols = [0xf4f0ec, 0x0c0c0c, 0x8a7a6a, 0xc4c4c4];
+  var mat = matStd(cols[Math.floor(R2() * cols.length)], 0.5 + R2() * 0.3, 0.1 + R2() * 0.4);
+  // Thin support
+  var sup = mkMesh(new THREE.BoxGeometry(0.06, pedH, 0.06), matStd(0x1a1a1a, 0.8, 0.2));
+  sup.position.y = pedH / 2; g.add(sup);
+  // The slab
+  var slab = mkMesh(new THREE.BoxGeometry(w, h, d), mat);
+  slab.position.y = pedH; g.add(slab);
+  var shd = mkMesh(new THREE.CircleGeometry(Math.max(w, d) * 0.55, 20),
+    new THREE.MeshStandardMaterial({ color: 0x000000, transparent: true, opacity: 0.13, roughness: 1, depthWrite: false }));
+  shd.rotation.x = -Math.PI / 2; shd.position.y = 0.005; g.add(shd);
+  return g;
+}
+
+// --- Mega room additional objects ---
+function buildMegaObelisk(R2, H) {
+  var g = new THREE.Group();
+  var base = 3.0 + R2() * 4.5;
+  var h = H * (0.85 + R2() * 0.12);
+  var mat = matStd(0x060606, 0.12, 0.75);
+  var body = mkMesh(new THREE.CylinderGeometry(0.4, base, h * 0.9, 4), mat);
+  body.position.y = h * 0.45; body.rotation.y = Math.PI / 4; g.add(body);
+  var tip = mkMesh(new THREE.CylinderGeometry(0, 1.2, h * 0.1, 4), mat.clone());
+  tip.position.y = h * 0.9 + h * 0.05; tip.rotation.y = Math.PI / 4; g.add(tip);
+  return g;
+}
+
+function buildMegaTorus(R2, H) {
+  var g = new THREE.Group();
+  var r = 8 + R2() * 12;
+  var tube = 0.6 + R2() * 1.8;
+  var mat = matStd(0x080808, 0.08, 0.92);
+  var torus = mkMesh(new THREE.TorusGeometry(r, tube, 20, 100), mat);
+  torus.position.y = H / 2;
+  torus.rotation.x = R2() * Math.PI / 2.5;
+  torus.rotation.z = R2() * Math.PI / 6;
+  g.add(torus);
+  return g;
+}
+
+// ------ Giant Apple Watch ------
+function buildAppleWatch(R2) {
+  var g = new THREE.Group();
+  // Scale: 1.7m tall, roughly human-height proportions
+  var W = 0.82, H = 1.02, depth = 0.13, corner = 0.18;
+  // Case body (rounded box approximated as box + corner cylinders)
+  var caseMat = matStd(0xa8a8a8, 0.12, 0.92);
+  var caseBody = mkMesh(new THREE.BoxGeometry(W, H, depth), caseMat);
+  caseBody.position.y = H / 2 + 0.08; g.add(caseBody);
+  // Four corner rods to fake round rect
+  var crMat = caseMat.clone();
+  var cornerH = H - corner * 2;
+  var cornerW = W - corner * 2;
+  [[W/2 - corner/2, corner/2, H/2 - corner/2],
+   [-W/2 + corner/2, corner/2, H/2 - corner/2],
+   [W/2 - corner/2, corner/2, -H/2 + corner/2],
+   [-W/2 + corner/2, corner/2, -H/2 + corner/2]
+  ].forEach(function(p) {
+    var cr = mkMesh(new THREE.CylinderGeometry(corner/2, corner/2, depth, 16), crMat);
+    cr.rotation.z = Math.PI / 2;
+    cr.rotation.x = Math.PI / 2;
+    cr.position.set(p[0], H/2 + 0.08 + p[2], p[1]);
+    // skip – the main box is close enough, rounding the look visually
+  });
+  // Screen (flush recessed plane)
+  var scrW = W * 0.86, scrH = H * 0.84;
+  // Build screen canvas texture: clock face + activity rings
+  var scv = document.createElement('canvas');
+  scv.width = 256; scv.height = 320;
+  var scx = scv.getContext('2d');
+  // OLED black bg
+  scx.fillStyle = '#000'; scx.fillRect(0, 0, 256, 320);
+  // Time
+  scx.fillStyle = '#ffffff';
+  scx.font = 'bold 72px Helvetica Neue, Arial';
+  scx.textAlign = 'center'; scx.textBaseline = 'middle';
+  scx.fillText('10:09', 128, 100);
+  // Date
+  scx.fillStyle = 'rgba(255,255,255,0.45)';
+  scx.font = '22px Helvetica Neue, Arial';
+  scx.fillText('TUE 24 MAR', 128, 150);
+  // Activity rings
+  var rings = [
+    { r: 78, col: '#ff375f', pct: 0.72 + Math.random() * 0.25 },
+    { r: 60, col: '#30d158', pct: 0.55 + Math.random() * 0.40 },
+    { r: 44, col: '#0cd1e0', pct: 0.40 + Math.random() * 0.55 }
+  ];
+  rings.forEach(function(ring) {
+    // Track
+    scx.strokeStyle = 'rgba(255,255,255,0.1)';
+    scx.lineWidth = 10;
+    scx.beginPath(); scx.arc(128, 232, ring.r, 0, Math.PI * 2); scx.stroke();
+    // Fill
+    scx.strokeStyle = ring.col;
+    scx.lineWidth = 10;
+    scx.lineCap = 'round';
+    scx.beginPath();
+    scx.arc(128, 232, ring.r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * ring.pct);
+    scx.stroke();
+  });
+  // Subtle glow on screen
+  var sg = scx.createRadialGradient(128, 160, 0, 128, 160, 140);
+  sg.addColorStop(0, 'rgba(255,255,255,0.06)');
+  sg.addColorStop(1, 'rgba(0,0,0,0)');
+  scx.fillStyle = sg; scx.fillRect(0, 0, 256, 320);
+
+  var scrMat = new THREE.MeshStandardMaterial({
+    map: new THREE.CanvasTexture(scv),
+    roughness: 0.05, metalness: 0.0,
+    emissive: new THREE.Color(0x101018), emissiveIntensity: 1.0
+  });
+  var scr = mkMesh(new THREE.PlaneGeometry(scrW, scrH), scrMat);
+  scr.position.set(0, H / 2 + 0.08, depth / 2 + 0.002); g.add(scr);
+  // Screen glow light
+  var sl = new THREE.PointLight(0x3050ff, 0.8, 3.5, 2.2);
+  sl.position.set(0, H / 2 + 0.08, depth / 2 + 0.5); g.add(sl);
+  // Digital crown (side button cylinder)
+  var crownMat = matStd(0x909090, 0.15, 0.95);
+  var crown = mkMesh(new THREE.CylinderGeometry(0.04, 0.04, 0.12, 20), crownMat);
+  crown.rotation.z = Math.PI / 2;
+  crown.position.set(W / 2 + 0.06, H / 2 + 0.08 + 0.12, 0); g.add(crown);
+  var sideBtn = mkMesh(new THREE.CylinderGeometry(0.03, 0.03, 0.09, 16), crownMat.clone());
+  sideBtn.rotation.z = Math.PI / 2;
+  sideBtn.position.set(W / 2 + 0.06, H / 2 + 0.08 - 0.14, 0); g.add(sideBtn);
+  // Band top & bottom
+  var bandMat = matStd(0x111111, 0.88, 0.0);
+  var bandW = W * 0.72, bandH = 0.65, bandD = depth * 0.85;
+  var bandTop = mkMesh(new THREE.BoxGeometry(bandW, bandH, bandD), bandMat);
+  bandTop.position.y = H + 0.08 + bandH / 2 - 0.02; g.add(bandTop);
+  var bandBot = mkMesh(new THREE.BoxGeometry(bandW, bandH * 0.9, bandD), bandMat.clone());
+  bandBot.position.y = 0.08 - bandH * 0.9 / 2 + 0.02; g.add(bandBot);
+  // Band pin/buckle on bottom band
+  var buckMat = matStd(0x888888, 0.2, 0.9);
+  var buck = mkMesh(new THREE.CylinderGeometry(0.025, 0.025, bandW * 0.8, 12), buckMat);
+  buck.rotation.z = Math.PI / 2;
+  buck.position.set(0, 0.08 - bandH * 0.9 + 0.09, 0); g.add(buck);
+  // Floor shadow
+  var shd = mkMesh(new THREE.CircleGeometry(0.52, 24),
+    new THREE.MeshStandardMaterial({ color: 0x000000, transparent: true, opacity: 0.22, roughness: 1, depthWrite: false }));
+  shd.rotation.x = -Math.PI / 2; shd.position.y = 0.003; g.add(shd);
+  return g;
+}
+
+// ------ 配管クラスター (industrial pipes) ------
+function buildPipeCluster(R2, H) {
+  var g = new THREE.Group();
+  var pipes = 3 + Math.floor(R2() * 5);
+  var metalMat  = matStd(0x888888, 0.35, 0.85);
+  var rustMat   = matStd(0x6a3a1a, 0.80, 0.50);
+  var yellowMat = matStd(0xddaa00, 0.55, 0.45);
+  var mats = [metalMat, metalMat, metalMat, rustMat, yellowMat];
+  var i, pr, ph, px, pz, mat, pipe, angle;
+  for (i = 0; i < pipes; i++) {
+    pr  = 0.045 + R2() * 0.09;
+    ph  = 0.8   + R2() * (H * 0.9);
+    px  = (R2() - 0.5) * 1.4;
+    pz  = (R2() - 0.5) * 0.5;
+    mat = mats[Math.floor(R2() * mats.length)];
+    pipe = mkMesh(new THREE.CylinderGeometry(pr, pr, ph, 10), mat);
+    pipe.position.set(px, ph / 2, pz); g.add(pipe);
+    // Flange rings
+    [[0.06, ph * 0.15], [0.06, ph * 0.75]].forEach(function(f) {
+      var fl = mkMesh(new THREE.CylinderGeometry(pr * 2.0, pr * 2.0, f[0], 12), mat.clone());
+      fl.position.set(px, f[1], pz); g.add(fl);
+    });
+    // Horizontal branch off ~halfway
+    if (R2() > 0.45) {
+      var hw = 0.5 + R2() * 1.8;
+      var horiz = mkMesh(new THREE.CylinderGeometry(pr * 0.85, pr * 0.85, hw, 10), mat.clone());
+      horiz.rotation.z = Math.PI / 2;
+      angle = (R2() > 0.5 ? 1 : -1);
+      horiz.position.set(px + angle * hw / 2, ph * (0.45 + R2() * 0.35), pz); g.add(horiz);
+      // elbow sphere
+      var el = mkMesh(new THREE.SphereGeometry(pr * 1.3, 12, 8), mat.clone());
+      el.position.set(px + angle * hw, ph * (0.45 + R2() * 0.35), pz); g.add(el);
+    }
+    // Pressure gauge on some pipes
+    if (R2() > 0.6) {
+      var gaugeY = ph * (0.55 + R2() * 0.25);
+      var gaugeStem = mkMesh(new THREE.CylinderGeometry(0.015, 0.015, 0.12, 8), mat.clone());
+      gaugeStem.rotation.z = Math.PI / 2;
+      gaugeStem.position.set(px + pr * 2.5, gaugeY, pz); g.add(gaugeStem);
+      var gaugeFace = mkMesh(new THREE.CylinderGeometry(0.09, 0.09, 0.04, 20), matStd(0xdddddd, 0.6, 0.05));
+      gaugeFace.rotation.z = Math.PI / 2;
+      gaugeFace.position.set(px + pr * 2.5 + 0.1, gaugeY, pz); g.add(gaugeFace);
+    }
+  }
+  // Valve wheel on one pipe
+  var vx = (R2() - 0.5) * 1.0, vr = 0.18 + R2() * 0.12;
+  var valveMat = matStd(0x555555, 0.5, 0.6);
+  var valveTorus = mkMesh(new THREE.TorusGeometry(vr, 0.022, 8, 28), valveMat);
+  valveTorus.position.set(vx - 0.35, 1.0 + R2() * 0.6, 0);
+  valveTorus.rotation.x = Math.PI / 2; g.add(valveTorus);
+  for (var sp = 0; sp < 4; sp++) {
+    var spoke = mkMesh(new THREE.CylinderGeometry(0.014, 0.014, vr * 2, 6), valveMat.clone());
+    spoke.rotation.z = Math.PI / 2; spoke.rotation.y = sp * Math.PI / 4;
+    spoke.position.set(vx - 0.35, 1.0 + R2() * 0.6, 0); g.add(spoke);
+  }
+  var shd = mkMesh(new THREE.CircleGeometry(1.1, 20),
+    new THREE.MeshStandardMaterial({ color: 0x000000, transparent: true, opacity: 0.16, roughness: 1, depthWrite: false }));
+  shd.rotation.x = -Math.PI / 2; shd.position.y = 0.004; g.add(shd);
+  return g;
+}
+
+// ------ VHS感あるもの (VCR unit with glitch screen) ------
+function buildVHSUnit(R2) {
+  var g = new THREE.Group();
+  // VCR / deck body
+  var W = 1.1, H = 0.28, D = 0.65;
+  var bodyMat = matStd(0x1a1a18, 0.82, 0.04);
+  var body = mkMesh(new THREE.BoxGeometry(W, H, D), bodyMat);
+  body.position.y = H / 2; g.add(body);
+  // Cassette slot
+  var slotMat = matStd(0x080808, 0.9, 0.0);
+  var slot = mkMesh(new THREE.BoxGeometry(W * 0.52, H * 0.28, 0.04), slotMat);
+  slot.position.set(-W * 0.08, H * 0.72, D / 2 + 0.001); g.add(slot);
+  // Counter display (glitchy canvas)
+  var dcv = document.createElement('canvas');
+  dcv.width = 160; dcv.height = 48;
+  var dcx = dcv.getContext('2d');
+  dcx.fillStyle = '#001108'; dcx.fillRect(0, 0, 160, 48);
+  // Segment display glow
+  dcx.fillStyle = '#00ff88';
+  dcx.font = 'bold 28px monospace';
+  dcx.textAlign = 'center'; dcx.textBaseline = 'middle';
+  var ctr = Math.floor(Math.random() * 9999);
+  dcx.fillText(String(ctr).padStart(4, '0'), 80, 26);
+  // Scanline overlay
+  for (var sl = 0; sl < 48; sl += 3) {
+    dcx.fillStyle = 'rgba(0,0,0,0.25)';
+    dcx.fillRect(0, sl, 160, 1);
+  }
+  var dispMat = new THREE.MeshStandardMaterial({
+    map: new THREE.CanvasTexture(dcv),
+    emissive: new THREE.Color(0x002211), emissiveIntensity: 1.2,
+    roughness: 0.3
+  });
+  var disp = mkMesh(new THREE.PlaneGeometry(W * 0.28, H * 0.3), dispMat);
+  disp.position.set(W * 0.22, H * 0.72, D / 2 + 0.002); g.add(disp);
+  // Buttons row
+  var btnMat = matStd(0x2a2a28, 0.7, 0.1);
+  for (var bi = 0; bi < 5; bi++) {
+    var btn = mkMesh(new THREE.BoxGeometry(0.055, 0.04, 0.04), btnMat.clone());
+    btn.position.set(-W * 0.3 + bi * 0.075, H * 0.38, D / 2 + 0.022); g.add(btn);
+  }
+  // Monitor on top (CRT-style small monitor)
+  var monW = 0.88, monH = 0.72, monD = 0.62;
+  var monMat = matStd(0x1e1c18, 0.80, 0.05);
+  var monBody = mkMesh(new THREE.BoxGeometry(monW, monH, monD), monMat);
+  monBody.position.y = H + monH / 2 + 0.02; g.add(monBody);
+  // CRT screen bezel
+  var bezelMat = matStd(0x141412, 0.85, 0.0);
+  var bezel = mkMesh(new THREE.BoxGeometry(monW * 0.84, monH * 0.78, 0.025), bezelMat);
+  bezel.position.set(0, H + monH / 2 + 0.02, monD / 2 + 0.003); g.add(bezel);
+  // VHS screen — static + scanlines
+  var scv2 = document.createElement('canvas');
+  scv2.width = 320; scv2.height = 240;
+  var scx2 = scv2.getContext('2d');
+  // Base color – washed-out grey-green VHS look
+  scx2.fillStyle = '#0a0a08'; scx2.fillRect(0, 0, 320, 240);
+  // Static noise
+  for (var nx = 0; nx < 320; nx += 2) {
+    for (var ny = 0; ny < 240; ny += 2) {
+      var nv = Math.floor(Math.random() * 80);
+      scx2.fillStyle = 'rgba(' + nv + ',' + nv + ',' + (nv * 0.8) + ',0.55)';
+      scx2.fillRect(nx, ny, 2, 2);
+    }
+  }
+  // Glitch bands
+  for (var gb = 0; gb < 4; gb++) {
+    var gy = Math.floor(Math.random() * 220);
+    var gw = 50 + Math.floor(Math.random() * 200);
+    var gx2 = Math.floor(Math.random() * (320 - gw));
+    scx2.fillStyle = 'rgba(255,255,200,' + (0.08 + Math.random() * 0.18) + ')';
+    scx2.fillRect(gx2, gy, gw, 3 + Math.floor(Math.random() * 6));
+  }
+  // Tracking lines
+  scx2.strokeStyle = 'rgba(255,255,255,0.1)';
+  scx2.lineWidth = 1.5;
+  for (var tl = 0; tl < 8; tl++) {
+    var ty = Math.floor(Math.random() * 240);
+    scx2.beginPath(); scx2.moveTo(0, ty); scx2.lineTo(320, ty + Math.random() * 6 - 3); scx2.stroke();
+  }
+  // Vignette
+  var vg = scx2.createRadialGradient(160, 120, 20, 160, 120, 160);
+  vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.75)');
+  scx2.fillStyle = vg; scx2.fillRect(0, 0, 320, 240);
+
+  var screenMat = new THREE.MeshStandardMaterial({
+    map: new THREE.CanvasTexture(scv2),
+    emissive: new THREE.Color(0x080808), emissiveIntensity: 0.9,
+    roughness: 0.15
+  });
+  var screen = mkMesh(new THREE.PlaneGeometry(monW * 0.76, monH * 0.69), screenMat);
+  screen.position.set(0, H + monH / 2 + 0.02, monD / 2 + 0.018); g.add(screen);
+  // Screen glow
+  var sgl = new THREE.PointLight(0x88ff44, 0.55, 2.5, 2.2);
+  sgl.position.set(0, H + monH / 2 + 0.02, monD / 2 + 0.4); g.add(sgl);
+  // Knobs on side
+  for (var ki = 0; ki < 2; ki++) {
+    var kn = mkMesh(new THREE.CylinderGeometry(0.04, 0.04, 0.05, 16), matStd(0x303028, 0.7, 0.1));
+    kn.rotation.z = Math.PI / 2;
+    kn.position.set(monW / 2 + 0.025, H + 0.25 + ki * 0.18, -0.1); g.add(kn);
+  }
+  var shd = mkMesh(new THREE.CircleGeometry(0.62, 20),
+    new THREE.MeshStandardMaterial({ color: 0x000000, transparent: true, opacity: 0.2, roughness: 1, depthWrite: false }));
+  shd.rotation.x = -Math.PI / 2; shd.position.y = 0.003; g.add(shd);
+  return g;
+}
+
+// ------ ブラウン管テレビ ------
+function buildCRTTV(R2) {
+  var g = new THREE.Group();
+  // Proportions: wide boxy CRT body
+  var W = 0.82 + R2() * 0.55;
+  var H = W * 0.78;
+  var D = W * 0.82 + 0.1; // CRTs are deep
+  var bodyCol = R2() > 0.5 ? 0x2a2820 : (R2() > 0.5 ? 0xc8c0a8 : 0x1a1816);
+  var bodyMat = matStd(bodyCol, 0.82, 0.04);
+  // Main body
+  var body = mkMesh(new THREE.BoxGeometry(W, H, D), bodyMat);
+  body.position.y = H / 2 + 0.12; g.add(body);
+  // Screen bulge (CRT glass – slightly convex box)
+  var sW = W * 0.72, sH = H * 0.74;
+  // Bezel frame
+  var bezel = mkMesh(new THREE.BoxGeometry(sW + 0.055, sH + 0.055, 0.04), matStd(0x111110, 0.85, 0.02));
+  bezel.position.set(0, H / 2 + 0.12, D / 2 + 0.002); g.add(bezel);
+  // Screen content – TV static / broadcast
+  var scv3 = document.createElement('canvas');
+  scv3.width = 256; scv3.height = 200;
+  var scx3 = scv3.getContext('2d');
+  var tvMode = Math.floor(R2() * 3);
+  if (tvMode === 0) {
+    // Static noise
+    scx3.fillStyle = '#0a0808'; scx3.fillRect(0, 0, 256, 200);
+    for (var px2 = 0; px2 < 256; px2 += 2) {
+      for (var py2 = 0; py2 < 200; py2 += 2) {
+        var pv = Math.floor(Math.random() * 120);
+        scx3.fillStyle = 'rgba(' + pv + ',' + pv + ',' + pv + ',0.7)';
+        scx3.fillRect(px2, py2, 2, 2);
+      }
+    }
+  } else if (tvMode === 1) {
+    // Color bars (broadcast test pattern)
+    var barCols = ['#c0c0c0','#c0c000','#00c0c0','#00c000','#c000c0','#c00000','#0000c0','#000000'];
+    var bw = Math.ceil(256 / barCols.length);
+    barCols.forEach(function(bc, bi) { scx3.fillStyle = bc; scx3.fillRect(bi * bw, 0, bw, 200); });
+    scx3.fillStyle = 'rgba(0,0,0,0.18)';
+    for (var sc2 = 0; sc2 < 200; sc2 += 4) { scx3.fillRect(0, sc2, 256, 2); }
+  } else {
+    // Dark dim room scene suggestion + scanlines
+    scx3.fillStyle = '#060604'; scx3.fillRect(0, 0, 256, 200);
+    scx3.fillStyle = 'rgba(50,50,40,0.4)';
+    scx3.fillRect(30, 60, 196, 90);
+    scx3.fillStyle = 'rgba(0,0,0,0.3)';
+    for (var sc3 = 0; sc3 < 200; sc3 += 3) { scx3.fillRect(0, sc3, 256, 1); }
+  }
+  // Scanlines always on top
+  scx3.fillStyle = 'rgba(0,0,0,0.22)';
+  for (var sl2 = 0; sl2 < 200; sl2 += 2) { scx3.fillRect(0, sl2, 256, 1); }
+  // CRT phosphor vignette
+  var vg3 = scx3.createRadialGradient(128, 100, 10, 128, 100, 130);
+  vg3.addColorStop(0, 'rgba(0,0,0,0)'); vg3.addColorStop(1, 'rgba(0,0,0,0.65)');
+  scx3.fillStyle = vg3; scx3.fillRect(0, 0, 256, 200);
+  var screenMat2 = new THREE.MeshStandardMaterial({
+    map: new THREE.CanvasTexture(scv3),
+    emissive: new THREE.Color(tvMode === 1 ? 0x101008 : 0x050505),
+    emissiveIntensity: 1.2, roughness: 0.08
+  });
+  var screen2 = mkMesh(new THREE.PlaneGeometry(sW * 0.93, sH * 0.93), screenMat2);
+  screen2.position.set(0, H / 2 + 0.12, D / 2 + 0.025); g.add(screen2);
+  // CRT screen glow
+  var sg2 = new THREE.PointLight(tvMode === 1 ? 0xffff88 : 0x88aaff, 0.5, 2.8, 2.0);
+  sg2.position.set(0, H / 2 + 0.12, D / 2 + 0.45); g.add(sg2);
+  // Control panel right side: tuner knob + channel knob
+  var knobMat = matStd(bodyCol, 0.6, 0.1);
+  [[W/2 - 0.04, H/2 + 0.12 + 0.08], [W/2 - 0.04, H/2 + 0.12 - 0.12]].forEach(function(kp) {
+    var kn = mkMesh(new THREE.CylinderGeometry(0.055, 0.055, 0.06, 16), knobMat.clone());
+    kn.rotation.z = Math.PI / 2; kn.position.set(kp[0] + 0.04, kp[1], 0); g.add(kn);
+    // Knob line indicator
+    var ind = mkMesh(new THREE.BoxGeometry(0.055, 0.008, 0.008), matStd(0x111111, 0.7, 0.0));
+    ind.position.set(kp[0] + 0.07, kp[1], 0.025); g.add(ind);
+  });
+  // Speaker grille (left side)
+  var grilleMat = matStd(0x0a0a08, 0.9, 0.0);
+  var grille = mkMesh(new THREE.BoxGeometry(W * 0.16, H * 0.6, 0.015), grilleMat);
+  grille.position.set(-W / 2 + W * 0.08 + 0.02, H / 2 + 0.12, D / 2 + 0.004); g.add(grille);
+  // Legs / feet
+  var feetMat = matStd(0x111110, 0.8, 0.0);
+  [[-W*0.3, -D*0.28], [W*0.3, -D*0.28], [-W*0.3, D*0.28], [W*0.3, D*0.28]].forEach(function(fp) {
+    var ft = mkMesh(new THREE.BoxGeometry(0.07, 0.12, 0.07), feetMat.clone());
+    ft.position.set(fp[0], 0.06, fp[1]); g.add(ft);
+  });
+  // Antenna
+  var antMat = matStd(0x888888, 0.4, 0.8);
+  var antBase = mkMesh(new THREE.BoxGeometry(0.22, 0.04, 0.06), antMat);
+  antBase.position.set(W * 0.15, H + 0.14, -D * 0.1); g.add(antBase);
+  var antL = mkMesh(new THREE.CylinderGeometry(0.008, 0.008, 0.55, 8), antMat.clone());
+  antL.rotation.z = 0.38; antL.position.set(W * 0.15 - 0.13, H + 0.14 + 0.26, -D * 0.1); g.add(antL);
+  var antR = mkMesh(new THREE.CylinderGeometry(0.008, 0.008, 0.55, 8), antMat.clone());
+  antR.rotation.z = -0.38; antR.position.set(W * 0.15 + 0.13, H + 0.14 + 0.26, -D * 0.1); g.add(antR);
+  var shd = mkMesh(new THREE.CircleGeometry(W * 0.65, 20),
+    new THREE.MeshStandardMaterial({ color: 0x000000, transparent: true, opacity: 0.22, roughness: 1, depthWrite: false }));
+  shd.rotation.x = -Math.PI / 2; shd.position.y = 0.003; g.add(shd);
+  return g;
+}
+
+// ------ ビデオテープ (VHS cassette) ------
+function buildVideoTape(R2) {
+  var g = new THREE.Group();
+  // Scale: roughly 10x actual (human-room scale) OR small cluster on floor
+  var scale = R2() > 0.42 ? 1.0 + R2() * 0.5 : 0.25 + R2() * 0.15;
+  var tW = 1.88 * scale, tH = 1.02 * scale, tD = 2.54 * scale;
+  // Label color
+  var labelCols = [0xe8e0d0, 0xd0e8e0, 0xd0d0e8, 0xe8d8d0, 0xd8e8d0, 0x222222];
+  var lCol = labelCols[Math.floor(R2() * labelCols.length)];
+  var caseMat = matStd(0x111111, 0.78, 0.04);
+  var labelMat = matStd(lCol, 0.82, 0.0);
+  var body = mkMesh(new THREE.BoxGeometry(tW, tH, tD), caseMat);
+  body.position.y = tH / 2; g.add(body);
+  // Label on top face
+  var labelPanel = mkMesh(new THREE.BoxGeometry(tW * 0.86, 0.005, tD * 0.6), labelMat);
+  labelPanel.position.set(0, tH + 0.001, -tD * 0.08); g.add(labelPanel);
+  // Tape window (front face transparent-ish)
+  var winMat = matStd(0x1a1208, 0.35, 0.15);
+  var win = mkMesh(new THREE.BoxGeometry(tW * 0.72, tH * 0.42, 0.01), winMat);
+  win.position.set(0, tH * 0.58, tD / 2 + 0.002); g.add(win);
+  // Tape reels inside window
+  [[-tW * 0.18, tH * 0.58], [tW * 0.18, tH * 0.58]].forEach(function(rp) {
+    var hub = mkMesh(new THREE.CylinderGeometry(tH * 0.18, tH * 0.18, 0.025, 20), matStd(0x333333, 0.6, 0.1));
+    hub.rotation.x = Math.PI / 2; hub.position.set(rp[0], rp[1], tD / 2 + 0.003); g.add(hub);
+    var spool = mkMesh(new THREE.CylinderGeometry(tH * 0.09, tH * 0.09, 0.02, 16), matStd(0x0a0a0a, 0.9, 0.0));
+    spool.rotation.x = Math.PI / 2; spool.position.set(rp[0], rp[1], tD / 2 + 0.012); g.add(spool);
+    // Spoke lines
+    for (var sp2 = 0; sp2 < 5; sp2++) {
+      var spk = mkMesh(new THREE.BoxGeometry(tH * 0.17, 0.01, 0.025), matStd(0x555555, 0.7, 0.0));
+      spk.rotation.z = sp2 * Math.PI / 2.5;
+      spk.rotation.x = Math.PI / 2; spk.position.set(rp[0], rp[1], tD / 2 + 0.01); g.add(spk);
+    }
+  });
+  // Guide pins
+  [[-tW * 0.34, tH * 0.35], [tW * 0.34, tH * 0.35]].forEach(function(gp) {
+    var pin = mkMesh(new THREE.CylinderGeometry(0.025 * scale, 0.025 * scale, 0.035, 8), matStd(0xaaaaaa, 0.3, 0.8));
+    pin.rotation.x = Math.PI / 2; pin.position.set(gp[0], gp[1], tD / 2 + 0.004); g.add(pin);
+  });
+  // Small stacked second tape if scale is small
+  if (scale < 0.45) {
+    var tape2 = buildVideoTape(function() { return 0.3 + R2() * 0.1; });
+    tape2.position.set(tW * 0.6, tH * 1.05, 0);
+    tape2.rotation.y = (R2() - 0.5) * 0.6;
+    g.add(tape2);
+  }
+  var shd = mkMesh(new THREE.CircleGeometry(Math.max(tW, tD) * 0.62, 20),
+    new THREE.MeshStandardMaterial({ color: 0x000000, transparent: true, opacity: 0.18, roughness: 1, depthWrite: false }));
+  shd.rotation.x = -Math.PI / 2; shd.position.y = 0.003; g.add(shd);
+  return g;
+}
+
+/* ----------------------------------------------------------
    Room builder helpers
 ---------------------------------------------------------- */
 function buildWallFB(grp, W, H, DOOR_W, DOOR_H, doorX, z, facingBack, matFn) {
@@ -1040,23 +1767,42 @@ function buildRoom(seed) {
     var exGrp;
     if (isMega) {
       // 巨大空間専用の圧倒的なオブジェクト
-      var mType = Math.floor(R2() * 3);
+      var mType = Math.floor(R2() * 5);
       if      (mType === 0) exGrp = buildMegaSphere(R2, H);
       else if (mType === 1) exGrp = buildMegaPillar(R2, H);
-      else                  exGrp = buildMegaCube(R2, H);
+      else if (mType === 2) exGrp = buildMegaCube(R2, H);
+      else if (mType === 3) exGrp = buildMegaObelisk(R2, H);
+      else                  exGrp = buildMegaTorus(R2, H);
     } else {
       // 通常のインテリアと展示物
-      var eType = Math.floor(R2() * 10);
-      if      (eType === 0) exGrp = buildMonolith(R2, H);
-      else if (eType === 1) exGrp = buildSphere(R2);
-      else if (eType === 2) exGrp = buildSculpture(R2);
-      else if (eType === 3) exGrp = buildCanvasArt(R2);
-      else if (eType === 4) exGrp = buildBench(R2);
-      else if (eType === 5) exGrp = buildWaterFeature(R2);
-      else if (eType === 6) exGrp = buildPlant(R2);
-      else if (eType === 7) exGrp = buildStairs(R2, H);
-      else if (eType === 8) exGrp = buildSpiralStairs(R2, H);
-      else                  exGrp = buildPipes(R2, H);
+      var eType = Math.floor(R2() * 27);
+      if      (eType === 0)  exGrp = buildMonolith(R2, H);
+      else if (eType === 1)  exGrp = buildSphere(R2);
+      else if (eType === 2)  exGrp = buildSculpture(R2);
+      else if (eType === 3)  exGrp = buildCanvasArt(R2);
+      else if (eType === 4)  exGrp = buildBench(R2);
+      else if (eType === 5)  exGrp = buildWaterFeature(R2);
+      else if (eType === 6)  exGrp = buildPlant(R2);
+      else if (eType === 7)  exGrp = buildStairs(R2, H);
+      else if (eType === 8)  exGrp = buildSpiralStairs(R2, H);
+      else if (eType === 9)  exGrp = buildPipes(R2, H);
+      else if (eType === 10) exGrp = buildObelisk(R2, H);
+      else if (eType === 11) exGrp = buildTorus(R2);
+      else if (eType === 12) exGrp = buildNeonFrame(R2);
+      else if (eType === 13) exGrp = buildArch(R2, H);
+      else if (eType === 14) exGrp = buildPyramid(R2);
+      else if (eType === 15) exGrp = buildMirrorPillar(R2, H);
+      else if (eType === 16) exGrp = buildCrystal(R2);
+      else if (eType === 17) exGrp = buildStackedBoxes(R2);
+      else if (eType === 18) exGrp = buildPendulum(R2, H);
+      else if (eType === 19) exGrp = buildWireframeCube(R2);
+      else if (eType === 20) exGrp = buildOrb(R2, H);
+      else if (eType === 21) exGrp = buildSlab(R2);
+      else if (eType === 22) exGrp = buildAppleWatch(R2);
+      else if (eType === 23) exGrp = buildPipeCluster(R2, H);
+      else if (eType === 24) exGrp = buildVHSUnit(R2);
+      else if (eType === 25) exGrp = buildCRTTV(R2);
+      else                   exGrp = buildVideoTape(R2);
     }
     
     // オブジェクトが巨大化しても壁にめり込まないよう、余裕を持たせる
