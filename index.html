@@ -1631,206 +1631,504 @@ var PALETTES = [
   { wr:250,wg:245,wb:240, fr:200,fg:180,fb:160, lc:0xffeedd, li:2.0, ac:0xffeedd, ai:0.22 }
 ];
 
+/* ----------------------------------------------------------
+   Room shape geometry builders
+---------------------------------------------------------- */
+function buildShapeRect(g, W, D, H, hw, hd, DW, DH, fDX, bDX, lDZ, rDZ, dB, dL, dR, wM) {
+  buildWallFB(g, W, H, DW, DH, fDX, -hd, false, wM);
+  if (dB) { buildWallFB(g, W, H, DW, DH, bDX, hd, true, wM); }
+  else { var m = mkMesh(new THREE.PlaneGeometry(W,H), wM()); m.rotation.y=Math.PI; m.position.set(0,H/2,hd); g.add(m); }
+  if (dL) { buildWallLR(g, D, H, DW, DH, lDZ, -hw, true, wM); }
+  else { var m2 = mkMesh(new THREE.PlaneGeometry(D,H), wM()); m2.rotation.y=Math.PI/2; m2.position.set(-hw,H/2,0); g.add(m2); }
+  if (dR) { buildWallLR(g, D, H, DW, DH, rDZ, hw, false, wM); }
+  else { var m3 = mkMesh(new THREE.PlaneGeometry(D,H), wM()); m3.rotation.y=-Math.PI/2; m3.position.set(hw,H/2,0); g.add(m3); }
+}
+
+function buildShapeHex(g, W, D, H, hw, hd, DW, DH, fDX, bDX, dB, wM) {
+  // Flat-top hex: front/back walls align with z=±hd; 4 angled corner walls
+  buildWallFB(g, W, H, DW, DH, fDX, -hd, false, wM);
+  if (dB) { buildWallFB(g, W, H, DW, DH, bDX, hd, true, wM); }
+  else { var m = mkMesh(new THREE.PlaneGeometry(W,H), wM()); m.rotation.y=Math.PI; m.position.set(0,H/2,hd); g.add(m); }
+  // 4 diagonal panels connecting front-back
+  var corners = [
+    [-hw,-hd*0.5, 0,-hd], [0,-hd, hw,-hd*0.5],
+    [hw, hd*0.5, 0, hd],  [0, hd,-hw, hd*0.5]
+  ];
+  corners.forEach(function(c) {
+    var len = Math.sqrt((c[2]-c[0])*(c[2]-c[0])+(c[3]-c[1])*(c[3]-c[1]));
+    var p = mkMesh(new THREE.PlaneGeometry(len,H), wM());
+    p.position.set((c[0]+c[2])/2, H/2, (c[1]+c[3])/2);
+    p.rotation.y = Math.atan2(c[2]-c[0], c[3]-c[1]);
+    g.add(p);
+  });
+}
+
+function buildShapeCylinder(g, R, H, DW, dB, wM) {
+  var N = 36;
+  var dA = Math.asin(Math.min(0.98, DW / (2*R))) * 2 * 1.15;
+  var doorAs = [Math.PI]; if (dB) doorAs.push(0);
+  for (var i = 0; i < N; i++) {
+    var a = (i / N) * Math.PI * 2;
+    var skip = false;
+    doorAs.forEach(function(da) {
+      var diff = Math.abs(((a - da) % (Math.PI*2) + Math.PI*3) % (Math.PI*2) - Math.PI);
+      if (diff < dA/2) skip = true;
+    });
+    if (skip) continue;
+    var pW = (2*Math.PI*R/N) * 1.08;
+    var p = mkMesh(new THREE.PlaneGeometry(pW, H), wM());
+    p.position.set(Math.sin(a)*R, H/2, Math.cos(a)*R);
+    p.rotation.y = a + Math.PI;
+    g.add(p);
+  }
+}
+
+function buildShapeDome(g, R, H, wM, floorTex, ceilTex) {
+  // Hemisphere using BackSide sphere (lower half only)
+  var dMat = wM(); dMat.side = THREE.BackSide;
+  var dome = new THREE.Mesh(new THREE.SphereGeometry(R, 32, 16, 0, Math.PI*2, 0, Math.PI/2), dMat);
+  g.add(dome);
+  // Short cylindrical base with door gap at front
+  var ringN = 32, ringDAngle = 0.55;
+  for (var i = 0; i < ringN; i++) {
+    var a = (i / ringN) * Math.PI * 2;
+    var diff = Math.abs(((a - Math.PI) % (Math.PI*2) + Math.PI*3) % (Math.PI*2) - Math.PI);
+    if (diff < ringDAngle) continue;
+    var pW = (2*Math.PI*R/ringN) * 1.06;
+    var m = mkMesh(new THREE.PlaneGeometry(pW, 1.2), wM());
+    m.position.set(Math.sin(a)*R, 0.6, Math.cos(a)*R);
+    m.rotation.y = a + Math.PI;
+    g.add(m);
+  }
+}
+
+function buildShapeLShape(g, W, D, H, hw, hd, DW, DH, fDX, bDX, lDZ, rDZ, dB, dL, dR, wM, R2) {
+  buildShapeRect(g, W, D, H, hw, hd, DW, DH, fDX, bDX, lDZ, rDZ, dB, dL, dR, wM);
+  // Inner walls blocking one corner → L shape
+  var bx = hw * (0.28 + R2() * 0.22), bz = hd * (0.28 + R2() * 0.22);
+  var sides = [[-1,-1],[-1,1],[1,-1],[1,1]];
+  var corner = sides[Math.floor(R2() * 4)];
+  var ox = corner[0] * (hw - bx), oz = corner[1] * (hd - bz);
+  // Horizontal inner wall
+  var m1 = mkMesh(new THREE.PlaneGeometry(bx*2, H), wM());
+  m1.rotation.y = corner[1] > 0 ? 0 : Math.PI;
+  m1.position.set(corner[0]*(hw-bx), H/2, corner[1]*(hd-bz)); g.add(m1);
+  var m1b = mkMesh(new THREE.PlaneGeometry(bx*2, H), wM());
+  m1b.rotation.y = corner[1] > 0 ? Math.PI : 0;
+  m1b.position.set(corner[0]*(hw-bx), H/2, corner[1]*(hd-bz)); g.add(m1b);
+  // Vertical inner wall
+  var m2 = mkMesh(new THREE.PlaneGeometry(bz*2, H), wM());
+  m2.rotation.y = corner[0] > 0 ? -Math.PI/2 : Math.PI/2;
+  m2.position.set(corner[0]*(hw-bx*2), H/2, corner[1]*(hd-bz)); g.add(m2);
+  var m2b = mkMesh(new THREE.PlaneGeometry(bz*2, H), wM());
+  m2b.rotation.y = corner[0] > 0 ? Math.PI/2 : -Math.PI/2;
+  m2b.position.set(corner[0]*(hw-bx*2), H/2, corner[1]*(hd-bz)); g.add(m2b);
+}
+
+function buildShapeCross(g, W, D, H, hw, hd, DW, DH, fDX, bDX, lDZ, rDZ, dB, dL, dR, wM, R2) {
+  buildShapeRect(g, W, D, H, hw, hd, DW, DH, fDX, bDX, lDZ, rDZ, dB, dL, dR, wM);
+  // Block 4 corners with inner walls
+  var cx = hw * (0.30 + R2() * 0.18), cz = hd * (0.30 + R2() * 0.18);
+  [[-1,-1],[-1,1],[1,-1],[1,1]].forEach(function(s) {
+    // Horizontal wall
+    var wh1 = mkMesh(new THREE.PlaneGeometry(cx*2, H), wM());
+    wh1.rotation.y = s[1]>0 ? 0 : Math.PI;
+    wh1.position.set(s[0]*(hw-cx), H/2, s[1]*(hd-cz)); g.add(wh1);
+    var wh2 = mkMesh(new THREE.PlaneGeometry(cx*2, H), wM());
+    wh2.rotation.y = s[1]>0 ? Math.PI : 0;
+    wh2.position.set(s[0]*(hw-cx), H/2, s[1]*(hd-cz)); g.add(wh2);
+    // Vertical wall
+    var wv1 = mkMesh(new THREE.PlaneGeometry(cz*2, H), wM());
+    wv1.rotation.y = s[0]>0 ? -Math.PI/2 : Math.PI/2;
+    wv1.position.set(s[0]*(hw-cx*2), H/2, s[1]*(hd-cz)); g.add(wv1);
+    var wv2 = mkMesh(new THREE.PlaneGeometry(cz*2, H), wM());
+    wv2.rotation.y = s[0]>0 ? Math.PI/2 : -Math.PI/2;
+    wv2.position.set(s[0]*(hw-cx*2), H/2, s[1]*(hd-cz)); g.add(wv2);
+  });
+}
+
+function buildShapeAtrium(g, W, D, H, hw, hd, DW, DH, fDX, bDX, lDZ, rDZ, dB, dL, dR, wM, flMat, R2) {
+  buildShapeRect(g, W, D, H, hw, hd, DW, DH, fDX, bDX, lDZ, rDZ, dB, dL, dR, wM);
+  var levels = 2 + Math.floor(R2() * 3);
+  var balD = 1.1 + R2() * 1.3;
+  var rMat = matStd(0xaaaaaa, 0.5, 0.6);
+  for (var lv = 1; lv <= levels; lv++) {
+    var lvH = H * lv / (levels + 1);
+    // Front + back balcony slabs
+    [{ z:-hd+balD/2, ry:0 }, { z:hd-balD/2, ry:Math.PI }].forEach(function(b) {
+      var bal = mkMesh(new THREE.BoxGeometry(W*0.72, 0.1, balD), flMat.clone());
+      bal.position.set(0, lvH, b.z); g.add(bal);
+      var rz = b.ry===0 ? balD/2-0.02 : -balD/2+0.02;
+      var rail = mkMesh(new THREE.BoxGeometry(W*0.72, 0.07, 0.04), rMat.clone());
+      rail.position.set(0, lvH+0.085, b.z+rz); g.add(rail);
+      // Balusters
+      var nb = Math.floor(W*0.72/0.32);
+      for (var bi=0; bi<nb; bi++) {
+        var bpost = mkMesh(new THREE.BoxGeometry(0.03, 0.09, 0.03), rMat.clone());
+        bpost.position.set(-W*0.36+bi*0.32+0.16, lvH+0.05, b.z+rz); g.add(bpost);
+      }
+    });
+    // Side balcony slabs
+    [{ x:-hw+balD/2 }, { x:hw-balD/2 }].forEach(function(b) {
+      var bal2 = mkMesh(new THREE.BoxGeometry(balD, 0.1, D*0.55), flMat.clone());
+      bal2.position.set(b.x, lvH, 0); g.add(bal2);
+      var rx = b.x<0 ? balD/2-0.02 : -balD/2+0.02;
+      var rail2 = mkMesh(new THREE.BoxGeometry(0.04, 0.07, D*0.55), rMat.clone());
+      rail2.position.set(b.x+rx, lvH+0.085, 0); g.add(rail2);
+    });
+    // Support columns
+    var cMat = matStd(0xcccccc, 0.7, 0.05);
+    [-W*0.28, W*0.28].forEach(function(bx) {
+      var col = mkMesh(new THREE.CylinderGeometry(0.06, 0.06, lvH, 8), cMat.clone());
+      col.position.set(bx, lvH/2, -hd+balD); g.add(col);
+    });
+  }
+}
+
+function buildShapeCave(g, W, D, H, hw, hd, DW, DH, fDX, wM, R2) {
+  buildWallFB(g, W, H, DW, DH, fDX, -hd, false, wM);
+  var wallDefs = [
+    { isZ:true,  pos:hd,  dir:Math.PI,   len:W },
+    { isZ:false, pos:-hw, dir:Math.PI/2, len:D },
+    { isZ:false, pos:hw,  dir:-Math.PI/2,len:D }
+  ];
+  wallDefs.forEach(function(w) {
+    var secs = 3 + Math.floor(R2()*5), cursor = -w.len/2;
+    for (var s=0; s<secs; s++) {
+      var sLen = (w.len/secs)*(0.45+R2()*1.1);
+      if (cursor+sLen > w.len/2) sLen = w.len/2-cursor;
+      if (sLen < 0.3) { cursor+=sLen; continue; }
+      var pH = H*(0.5+R2()*0.55);
+      var jit = (R2()-0.5)*0.55, tilt = (R2()-0.5)*0.28;
+      var m = mkMesh(new THREE.PlaneGeometry(sLen, pH), wM());
+      m.rotation.y = w.dir + tilt;
+      if (w.isZ) m.position.set(cursor+sLen/2+jit, pH/2, w.pos);
+      else       m.position.set(w.pos, pH/2, cursor+sLen/2+jit);
+      g.add(m); cursor += sLen;
+    }
+  });
+  // Random stalactite-like boxes hanging from ceiling
+  var ns = 4 + Math.floor(R2()*8);
+  var sMat = matStd(0x888880, 0.88, 0.02);
+  for (var i=0; i<ns; i++) {
+    var sh = H*(0.15+R2()*0.4), sw = 0.08+R2()*0.18;
+    var st = mkMesh(new THREE.BoxGeometry(sw, sh, sw*(0.6+R2()*0.8)), sMat.clone());
+    st.position.set((R2()-0.5)*W*0.7, H-sh/2, (R2()-0.5)*D*0.6); g.add(st);
+  }
+}
+
+function buildShapeBrutalist(g, W, D, H, hw, hd, DW, DH, fDX, bDX, lDZ, rDZ, dB, dL, dR, wM, R2) {
+  buildShapeRect(g, W, D, H, hw, hd, DW, DH, fDX, bDX, lDZ, rDZ, dB, dL, dR, wM);
+  var nc = 2+Math.floor(R2()*3), nr = 1+Math.floor(R2()*2);
+  var pMat = matStd(0x909090, 0.92, 0.0);
+  for (var ci=0; ci<nc; ci++) {
+    for (var ri=0; ri<nr; ri++) {
+      var px = -hw+(W/(nc+1))*(ci+1), pz = -hd+(D/(nr+1))*(ri+1);
+      var pr = 0.13+R2()*0.15;
+      var pil = mkMesh(new THREE.BoxGeometry(pr*2, H, pr*2), pMat.clone());
+      pil.position.set(px, H/2, pz); g.add(pil);
+      var base = mkMesh(new THREE.BoxGeometry(pr*3.8, 0.09, pr*3.8), matStd(0x777777, 0.88, 0.0));
+      base.position.set(px, 0.045, pz); g.add(base);
+      var cap = mkMesh(new THREE.BoxGeometry(pr*3.8, 0.07, pr*3.8), matStd(0x777777, 0.88, 0.0));
+      cap.position.set(px, H-0.035, pz); g.add(cap);
+    }
+  }
+  // Ceiling beams
+  var bMat = matStd(0x686868, 0.88, 0.0);
+  for (var bi=0; bi<nc-1; bi++) {
+    var bx = -hw+(W/nc)*(bi+1);
+    var beam = mkMesh(new THREE.BoxGeometry(0.22, 0.24, D), bMat.clone());
+    beam.position.set(bx, H-0.12, 0); g.add(beam);
+  }
+}
+
+function buildShapeNarrow(g, W, D, H, hw, hd, DW, DH, fDX, bDX, dB, wM, R2) {
+  buildWallFB(g, W, H, DW, DH, fDX, -hd, false, wM);
+  if (dB) { buildWallFB(g, W, H, DW, DH, bDX, hd, true, wM); }
+  else { var m = mkMesh(new THREE.PlaneGeometry(W,H), wM()); m.rotation.y=Math.PI; m.position.set(0,H/2,hd); g.add(m); }
+  var ml = mkMesh(new THREE.PlaneGeometry(D,H), wM()); ml.rotation.y=Math.PI/2; ml.position.set(-hw,H/2,0); g.add(ml);
+  var mr = mkMesh(new THREE.PlaneGeometry(D,H), wM()); mr.rotation.y=-Math.PI/2; mr.position.set(hw,H/2,0); g.add(mr);
+  // Arch dividers along the length
+  var nA = Math.max(2, Math.floor(D/4.5));
+  var aW = W*0.58 + R2()*W*0.2;
+  for (var ai=1; ai<nA; ai++) {
+    var az = -hd+(D/nA)*ai;
+    var aH = H*(0.68+R2()*0.2);
+    var sW = (W-aW)/2;
+    if (sW>0.05) {
+      var al = mkMesh(new THREE.BoxGeometry(sW, aH, 0.16), wM()); al.position.set(-aW/2-sW/2, aH/2, az); g.add(al);
+      var ar = mkMesh(new THREE.BoxGeometry(sW, aH, 0.16), wM()); ar.position.set(aW/2+sW/2, aH/2, az); g.add(ar);
+    }
+    var topH = H-aH;
+    if (topH>0.05) { var at = mkMesh(new THREE.BoxGeometry(W, topH, 0.16), wM()); at.position.set(0,aH+topH/2,az); g.add(at); }
+    var aR = aW/2;
+    var arc = mkMesh(new THREE.TorusGeometry(aR, 0.08, 6, 18, Math.PI), wM());
+    arc.position.set(0, aH, az); arc.rotation.z=Math.PI; g.add(arc);
+  }
+}
+
+function buildShapeOctagon(g, W, D, H, hw, hd, DW, DH, fDX, bDX, dB, wM, R2) {
+  // 8-sided room: 4 flat walls (cardinal) + 4 corner cuts
+  buildWallFB(g, W, H, DW, DH, fDX, -hd, false, wM);
+  if (dB) { buildWallFB(g, W, H, DW, DH, bDX, hd, true, wM); }
+  else { var m = mkMesh(new THREE.PlaneGeometry(W,H), wM()); m.rotation.y=Math.PI; m.position.set(0,H/2,hd); g.add(m); }
+  var ml = mkMesh(new THREE.PlaneGeometry(D*0.6,H), wM()); ml.rotation.y=Math.PI/2; ml.position.set(-hw,H/2,0); g.add(ml);
+  var mr = mkMesh(new THREE.PlaneGeometry(D*0.6,H), wM()); mr.rotation.y=-Math.PI/2; mr.position.set(hw,H/2,0); g.add(mr);
+  // 4 corner diagonal panels
+  var cx = hw*0.65, cz = hd*0.65;
+  var diags = [
+    [-hw,-cz, -cx,-hd], [cx,-hd, hw,-cz],
+    [hw, cz,  cx, hd],  [-cx,hd, -hw,cz]
+  ];
+  diags.forEach(function(c) {
+    var len = Math.sqrt((c[2]-c[0])*(c[2]-c[0])+(c[3]-c[1])*(c[3]-c[1]));
+    var p = mkMesh(new THREE.PlaneGeometry(len,H), wM());
+    p.position.set((c[0]+c[2])/2, H/2, (c[1]+c[3])/2);
+    p.rotation.y = Math.atan2(c[2]-c[0], c[3]-c[1]);
+    g.add(p);
+  });
+}
+
+function buildShapeVault(g, W, D, H, hw, hd, DW, DH, fDX, bDX, lDZ, rDZ, dB, dL, dR, wM, R2) {
+  // Rect floor/walls but vaulted ceiling (barrel vault or groin vault feel)
+  buildShapeRect(g, W, D, H, hw, hd, DW, DH, fDX, bDX, lDZ, rDZ, dB, dL, dR, wM);
+  // Vaulted ceiling arches running along D axis
+  var nArches = Math.max(2, Math.floor(D/5));
+  var aMat = wM();
+  for (var ai=0; ai<=nArches; ai++) {
+    var az = -hd+(D/nArches)*ai;
+    var arc = mkMesh(new THREE.TorusGeometry(W/2, 0.14, 8, 24, Math.PI), aMat.clone());
+    arc.position.set(0, H, az); arc.rotation.z=Math.PI; g.add(arc);
+  }
+  // Ribs along Z between arches
+  var nRibs = 4 + Math.floor(R2()*4);
+  for (var ri2=0; ri2<nRibs; ri2++) {
+    var rx = -hw+(W/(nRibs+1))*(ri2+1);
+    var rib = mkMesh(new THREE.CylinderGeometry(0.055, 0.055, D, 8), aMat.clone());
+    rib.rotation.x = Math.PI/2; rib.position.set(rx, H, 0); g.add(rib);
+  }
+}
+
+/* ----------------------------------------------------------
+   Room builder — multi-shape
+---------------------------------------------------------- */
 function buildRoom(seed) {
-  var R2  = makeRng(seed);
-  
-  // --- 新規追加: メガ・ルーム（巨大空間）の判定とサイズ変更 ---
-  var isMega = R2() > 0.75; // 25%の確率でメガ・ルーム
-  var W   = isMega ? 60 + R2() * 120 : 16 + R2() * 36;
-  var D   = isMega ? 80 + R2() * 140 : 22 + R2() * 62;
-  var H   = isMega ? 30 + R2() * 50  : 5  + R2() * 9;
-  var fogNear = isMega ? 20 + R2() * 20 : 12; // 柔らかい空気感を演出する動的フォグ
-  var fogFar  = isMega ? D * 0.8 + 40   : 90;
-  // ------------------------------------------------------------
-  
-  var hw  = W / 2, hd = D / 2;
-  var DOOR_W = 2.1 + R2() * 0.7;
-  var DOOR_H = 2.5 + R2() * 0.6;
+  var R2 = makeRng(seed);
+
+  // ---- shape & size selection ----
+  var ALL_SHAPES  = ['rect','rect','rect','hex','cylinder','dome',
+                     'lshape','cross','atrium','cave','brutalist',
+                     'narrow','octagon','vault'];
+  var MEGA_SHAPES = ['rect','hex','cylinder','dome','brutalist','atrium'];
+  var isMega = R2() > 0.82;
+  var shapeType = isMega
+    ? MEGA_SHAPES[Math.floor(R2() * MEGA_SHAPES.length)]
+    : ALL_SHAPES[Math.floor(R2() * ALL_SHAPES.length)];
+
+  var W, D, H;
+  if (isMega) {
+    if (shapeType==='dome'||shapeType==='cylinder') { var r0=40+R2()*40; W=D=r0*2; H=r0; }
+    else { W=60+R2()*120; D=80+R2()*140; H=30+R2()*50; }
+  } else {
+    if (shapeType==='dome')     { var r0=8+R2()*14; W=D=r0*2; H=r0; }
+    else if (shapeType==='cylinder') { var r0=6+R2()*12; W=D=r0*2; H=5+R2()*10; }
+    else if (shapeType==='atrium')   { W=10+R2()*18; D=14+R2()*22; H=14+R2()*18; }
+    else if (shapeType==='narrow')   { W=3.2+R2()*2.5; D=18+R2()*36; H=4+R2()*5; }
+    else if (shapeType==='vault')    { W=8+R2()*14; D=18+R2()*28; H=6+R2()*6; }
+    else { W=16+R2()*36; D=22+R2()*62; H=5+R2()*9; }
+  }
+  var hw = W/2, hd = D/2;
+  var fogNear = isMega ? 20+R2()*20 : (shapeType==='narrow'?4:12);
+  var fogFar  = isMega ? D*0.8+40 : (shapeType==='narrow'?20:90);
+
+  var DOOR_W = 2.1+R2()*0.7, DOOR_H = 2.5+R2()*0.6;
   var pal = PALETTES[Math.floor(R2() * PALETTES.length)];
   var grp = new THREE.Group();
 
-  /* textures */
   var wallTex  = makeWallTex(pal.wr, pal.wg, pal.wb);
-  wallTex.repeat.set(W / 4, H / 4);
+  wallTex.repeat.set(W/4, H/4);
   var floorTex = makeFloorTex(pal.fr, pal.fg, pal.fb);
-  floorTex.repeat.set(W / 4, D / 4);
+  floorTex.repeat.set(W/4, D/4);
   var ceilTex  = makeCeilTex(
-    Math.max(pal.wr - 14, 0), Math.max(pal.wg - 14, 0), Math.max(pal.wb - 14, 0));
-  ceilTex.repeat.set(W / 4, D / 4);
+    Math.max(pal.wr-14,0), Math.max(pal.wg-14,0), Math.max(pal.wb-14,0));
+  ceilTex.repeat.set(W/4, D/4);
 
-  function wallMat() {
-    return new THREE.MeshStandardMaterial({ map: wallTex, roughness: 0.84, metalness: 0.0 });
+  function wallMat()  { return new THREE.MeshStandardMaterial({ map:wallTex, roughness:0.84, metalness:0.0 }); }
+  function floorMat() { return new THREE.MeshStandardMaterial({ map:floorTex, roughness:0.74, metalness:0.04 }); }
+  function ceilMat()  { return new THREE.MeshStandardMaterial({ map:ceilTex, roughness:0.90, metalness:0.0 }); }
+
+  // ---- floor ----
+  var floorGeo = (shapeType==='dome'||shapeType==='cylinder')
+    ? new THREE.CircleGeometry(hw, 48)
+    : new THREE.PlaneGeometry(W, D);
+  var floor = mkMesh(floorGeo, floorMat());
+  floor.rotation.x = -Math.PI/2; grp.add(floor);
+
+  // ---- ceiling ----
+  if (shapeType==='dome') {
+    // no separate ceiling — dome IS the ceiling
+  } else if (shapeType==='cylinder') {
+    var cc = mkMesh(new THREE.CircleGeometry(hw,48), ceilMat());
+    cc.rotation.x = Math.PI/2; cc.position.y = H; grp.add(cc);
+  } else {
+    var ceil = mkMesh(new THREE.PlaneGeometry(W, D), ceilMat());
+    ceil.rotation.x = Math.PI/2; ceil.position.y = H; grp.add(ceil);
   }
 
-  /* floor & ceiling */
-  var floor = mkMesh(new THREE.PlaneGeometry(W, D),
-    new THREE.MeshStandardMaterial({ map: floorTex, roughness: 0.74, metalness: 0.04 }));
-  floor.rotation.x = -Math.PI / 2;
-  grp.add(floor);
-
-  var ceil = mkMesh(new THREE.PlaneGeometry(W, D),
-    new THREE.MeshStandardMaterial({ map: ceilTex, roughness: 0.90, metalness: 0.0 }));
-  ceil.rotation.x = Math.PI / 2;
-  ceil.position.y = H;
-  grp.add(ceil);
-
-  /* ---- which walls get doors ---- */
-  var numDoors   = 1 + Math.floor(R2() * 3);
-  var extraWalls = ['back', 'left', 'right'];
-  for (var si = extraWalls.length - 1; si > 0; si--) {
-    var sj = Math.floor(R2() * (si + 1));
-    var st = extraWalls[si]; extraWalls[si] = extraWalls[sj]; extraWalls[sj] = st;
+  // ---- doors ----
+  var numDoors = 1 + Math.floor(R2()*3);
+  if (shapeType==='dome'||shapeType==='narrow') numDoors=1;
+  if (shapeType==='hex'||shapeType==='cylinder'||shapeType==='octagon') numDoors=Math.min(numDoors,2);
+  var extraWalls = ['back','left','right'];
+  for (var si=extraWalls.length-1; si>0; si--) {
+    var sj=Math.floor(R2()*(si+1)); var st=extraWalls[si]; extraWalls[si]=extraWalls[sj]; extraWalls[sj]=st;
   }
-  var activeExtra  = extraWalls.slice(0, numDoors - 1);
+  var activeExtra = extraWalls.slice(0, numDoors-1);
+  if (shapeType==='hex'||shapeType==='cylinder'||shapeType==='octagon') {
+    activeExtra = activeExtra.filter(function(e){ return e==='back'; });
+  }
   var hasDoorBack  = activeExtra.indexOf('back')  >= 0;
   var hasDoorLeft  = activeExtra.indexOf('left')  >= 0;
   var hasDoorRight = activeExtra.indexOf('right') >= 0;
+  var maxXOff = Math.max(0,(W-DOOR_W)/2-1.4);
+  var maxZOff = Math.max(0,(D-DOOR_W)/2-1.4);
+  var frontDX=(R2()*2-1)*maxXOff, backDX=(R2()*2-1)*maxXOff;
+  var leftDZ=(R2()*2-1)*maxZOff,  rightDZ=(R2()*2-1)*maxZOff;
 
-  var maxXOff = Math.max(0, (W - DOOR_W) / 2 - 1.4);
-  var maxZOff = Math.max(0, (D - DOOR_W) / 2 - 1.4);
-  var frontDX = (R2() * 2 - 1) * maxXOff;
-  var backDX  = (R2() * 2 - 1) * maxXOff;
-  var leftDZ  = (R2() * 2 - 1) * maxZOff;
-  var rightDZ = (R2() * 2 - 1) * maxZOff;
+  // ---- walls by shape ----
+  if      (shapeType==='hex')      buildShapeHex(grp,W,D,H,hw,hd,DOOR_W,DOOR_H,frontDX,backDX,hasDoorBack,wallMat);
+  else if (shapeType==='cylinder') buildShapeCylinder(grp,hw,H,DOOR_W,hasDoorBack,wallMat);
+  else if (shapeType==='dome')     buildShapeDome(grp,hw,H,wallMat,floorTex,ceilTex);
+  else if (shapeType==='lshape')   buildShapeLShape(grp,W,D,H,hw,hd,DOOR_W,DOOR_H,frontDX,backDX,leftDZ,rightDZ,hasDoorBack,hasDoorLeft,hasDoorRight,wallMat,R2);
+  else if (shapeType==='cross')    buildShapeCross(grp,W,D,H,hw,hd,DOOR_W,DOOR_H,frontDX,backDX,leftDZ,rightDZ,hasDoorBack,hasDoorLeft,hasDoorRight,wallMat,R2);
+  else if (shapeType==='atrium')   buildShapeAtrium(grp,W,D,H,hw,hd,DOOR_W,DOOR_H,frontDX,backDX,leftDZ,rightDZ,hasDoorBack,hasDoorLeft,hasDoorRight,wallMat,floorMat,R2);
+  else if (shapeType==='cave')     buildShapeCave(grp,W,D,H,hw,hd,DOOR_W,DOOR_H,frontDX,wallMat,R2);
+  else if (shapeType==='brutalist') buildShapeBrutalist(grp,W,D,H,hw,hd,DOOR_W,DOOR_H,frontDX,backDX,leftDZ,rightDZ,hasDoorBack,hasDoorLeft,hasDoorRight,wallMat,R2);
+  else if (shapeType==='narrow')   buildShapeNarrow(grp,W,D,H,hw,hd,DOOR_W,DOOR_H,frontDX,backDX,hasDoorBack,wallMat,R2);
+  else if (shapeType==='octagon')  buildShapeOctagon(grp,W,D,H,hw,hd,DOOR_W,DOOR_H,frontDX,backDX,hasDoorBack,wallMat,R2);
+  else if (shapeType==='vault')    buildShapeVault(grp,W,D,H,hw,hd,DOOR_W,DOOR_H,frontDX,backDX,leftDZ,rightDZ,hasDoorBack,hasDoorLeft,hasDoorRight,wallMat,R2);
+  else buildShapeRect(grp,W,D,H,hw,hd,DOOR_W,DOOR_H,frontDX,backDX,leftDZ,rightDZ,hasDoorBack,hasDoorLeft,hasDoorRight,wallMat);
 
-  /* ---- walls with door cutouts ---- */
-  buildWallFB(grp, W, H, DOOR_W, DOOR_H, frontDX, -hd, false, wallMat);
-
-  if (hasDoorBack) {
-    buildWallFB(grp, W, H, DOOR_W, DOOR_H, backDX, hd, true, wallMat);
-  } else {
-    var wb = mkMesh(new THREE.PlaneGeometry(W, H), wallMat());
-    wb.rotation.y = Math.PI; wb.position.set(0, H / 2, hd); grp.add(wb);
+  // ---- skirting & cornice (rect-like shapes only) ----
+  var rectLike = ['rect','lshape','cross','atrium','brutalist','narrow','vault'];
+  if (rectLike.indexOf(shapeType) >= 0) {
+    var skC = new THREE.Color(pal.wr/255*0.82, pal.wg/255*0.82, pal.wb/255*0.82);
+    var skMat = new THREE.MeshStandardMaterial({ color:skC, roughness:0.80, metalness:0.02 });
+    var skH=0.11, skT=0.045;
+    [[new THREE.BoxGeometry(W,skH,skT),0,skH/2,-hd],
+     [new THREE.BoxGeometry(W,skH,skT),0,skH/2, hd],
+     [new THREE.BoxGeometry(skT,skH,D),-hw,skH/2,0],
+     [new THREE.BoxGeometry(skT,skH,D), hw,skH/2,0],
+     [new THREE.BoxGeometry(W,0.05,skT),0,H-0.025,-hd],
+     [new THREE.BoxGeometry(W,0.05,skT),0,H-0.025, hd],
+     [new THREE.BoxGeometry(skT,0.05,D),-hw,H-0.025,0],
+     [new THREE.BoxGeometry(skT,0.05,D), hw,H-0.025,0]
+    ].forEach(function(s) {
+      var m=mkMesh(s[0],skMat.clone()); m.position.set(s[1],s[2],s[3]); grp.add(m);
+    });
   }
-  if (hasDoorLeft) {
-    buildWallLR(grp, D, H, DOOR_W, DOOR_H, leftDZ, -hw, true, wallMat);
-  } else {
-    var wl = mkMesh(new THREE.PlaneGeometry(D, H), wallMat());
-    wl.rotation.y = Math.PI / 2; wl.position.set(-hw, H / 2, 0); grp.add(wl);
-  }
-  if (hasDoorRight) {
-    buildWallLR(grp, D, H, DOOR_W, DOOR_H, rightDZ, hw, false, wallMat);
-  } else {
-    var wr2 = mkMesh(new THREE.PlaneGeometry(D, H), wallMat());
-    wr2.rotation.y = -Math.PI / 2; wr2.position.set(hw, H / 2, 0); grp.add(wr2);
+
+  // ---- wall details (outlets/switches) ----
+  var detailShapes = ['rect','brutalist','atrium','vault'];
+  if (detailShapes.indexOf(shapeType) >= 0) {
+    addDetails(grp,0, 1,W,H,hw,hd,R2);
+    addDetails(grp,0,-1,W,H,hw,hd,R2);
+    addDetails(grp,1, 1,D,H,hw,hd,R2);
+    addDetails(grp,1,-1,D,H,hw,hd,R2);
   }
 
-  /* ---- skirting & cornice ---- */
-  var skC = new THREE.Color(pal.wr / 255 * 0.82, pal.wg / 255 * 0.82, pal.wb / 255 * 0.82);
-  var skMat = new THREE.MeshStandardMaterial({ color: skC, roughness: 0.80, metalness: 0.02 });
-  var skH = 0.11, skT = 0.045;
-  [
-    [new THREE.BoxGeometry(W, skH, skT), 0,   skH / 2,   -hd],
-    [new THREE.BoxGeometry(W, skH, skT), 0,   skH / 2,    hd],
-    [new THREE.BoxGeometry(skT, skH, D), -hw, skH / 2,   0  ],
-    [new THREE.BoxGeometry(skT, skH, D),  hw, skH / 2,   0  ],
-    [new THREE.BoxGeometry(W, 0.05, skT), 0,  H - 0.025, -hd],
-    [new THREE.BoxGeometry(W, 0.05, skT), 0,  H - 0.025,  hd],
-    [new THREE.BoxGeometry(skT, 0.05, D),-hw, H - 0.025, 0  ],
-    [new THREE.BoxGeometry(skT, 0.05, D), hw, H - 0.025, 0  ],
-  ].forEach(function (s) {
-    var m = mkMesh(s[0], skMat.clone());
-    m.position.set(s[1], s[2], s[3]); grp.add(m);
-  });
+  // ---- door glows ----
+  addDoorGlow(grp, frontDX, -hd+0.02, DOOR_H, 0,           pal.lc);
+  if (hasDoorBack)  addDoorGlow(grp, backDX,  hd-0.02,  DOOR_H, Math.PI,      pal.lc);
+  if (hasDoorLeft)  addDoorGlow(grp, leftDZ, -hw+0.02,  DOOR_H, Math.PI/2,    pal.lc);
+  if (hasDoorRight) addDoorGlow(grp, rightDZ, hw-0.02,  DOOR_H, -Math.PI/2,   pal.lc);
 
-  /* ---- wall details ---- */
-  addDetails(grp, 0,  1, W, H, hw, hd, R2);
-  addDetails(grp, 0, -1, W, H, hw, hd, R2);
-  addDetails(grp, 1,  1, D, H, hw, hd, R2);
-  addDetails(grp, 1, -1, D, H, hw, hd, R2);
-
-  /* ---- door glows ---- */
-  addDoorGlow(grp, frontDX, -hd + 0.02, DOOR_H, 0,             pal.lc);
-  if (hasDoorBack)  addDoorGlow(grp, backDX,   hd - 0.02,  DOOR_H, Math.PI,       pal.lc);
-  if (hasDoorLeft)  addDoorGlow(grp, leftDZ,  -hw + 0.02,  DOOR_H, Math.PI / 2,   pal.lc);
-  if (hasDoorRight) addDoorGlow(grp, rightDZ,  hw - 0.02,  DOOR_H, -Math.PI / 2,  pal.lc);
-
-  /* ---- lighting ---- */
+  // ---- lighting ----
   var amb = new THREE.AmbientLight(pal.ac, pal.ai);
   grp.add(amb);
-  var rows = Math.min(Math.ceil(D / 8), 2);
-  var cols = Math.min(Math.ceil(W / 8), 2);
-  for (var ri = 0; ri < rows; ri++) {
-    for (var ci = 0; ci < cols; ci++) {
-      var lx = -hw + (W / cols) * (ci + 0.5);
-      var lz = -hd + (D / rows) * (ri + 0.5);
-      var sl = new THREE.SpotLight(pal.lc, pal.li, H * 2.5, Math.PI / 5.5, 0.42, 1.5);
-      sl.position.set(lx, H - 0.1, lz);
-      sl.target.position.set(lx, 0, lz);
-      grp.add(sl); grp.add(sl.target);
+  if (shapeType==='dome'||shapeType==='cylinder') {
+    // Central point light for round rooms
+    var cpl = new THREE.PointLight(pal.lc, pal.li*1.2, H*3, 1.5);
+    cpl.position.set(0, H*0.65, 0); grp.add(cpl);
+  } else {
+    var rows = Math.min(Math.ceil(D/8), isMega?4:2);
+    var cols2 = Math.min(Math.ceil(W/8), isMega?4:2);
+    for (var ri=0; ri<rows; ri++) {
+      for (var ci=0; ci<cols2; ci++) {
+        var lx=-hw+(W/cols2)*(ci+0.5), lz=-hd+(D/rows)*(ri+0.5);
+        var sl=new THREE.SpotLight(pal.lc,pal.li,H*2.5,Math.PI/5.5,0.42,1.5);
+        sl.position.set(lx,H-0.1,lz); sl.target.position.set(lx,0,lz);
+        grp.add(sl); grp.add(sl.target);
+      }
     }
   }
 
-  /* ---- exhibits (一部変更: メガ・ルーム用オブジェクトの分岐追加) ---- */
-  var exCount = isMega ? (1 + Math.floor(R2() * 3)) : (3 + Math.floor(R2() * 9));
-  for (var ei = 0; ei < exCount; ei++) {
+  // ---- exhibits ----
+  var exCount = isMega ? (1+Math.floor(R2()*3)) : (3+Math.floor(R2()*9));
+  for (var ei=0; ei<exCount; ei++) {
     var exGrp;
     if (isMega) {
-      // 巨大空間専用の圧倒的なオブジェクト
-      var mType = Math.floor(R2() * 5);
-      if      (mType === 0) exGrp = buildMegaSphere(R2, H);
-      else if (mType === 1) exGrp = buildMegaPillar(R2, H);
-      else if (mType === 2) exGrp = buildMegaCube(R2, H);
-      else if (mType === 3) exGrp = buildMegaObelisk(R2, H);
-      else                  exGrp = buildMegaTorus(R2, H);
+      var mType=Math.floor(R2()*5);
+      if      (mType===0) exGrp=buildMegaSphere(R2,H);
+      else if (mType===1) exGrp=buildMegaPillar(R2,H);
+      else if (mType===2) exGrp=buildMegaCube(R2,H);
+      else if (mType===3) exGrp=buildMegaObelisk(R2,H);
+      else                exGrp=buildMegaTorus(R2,H);
     } else {
-      // 通常のインテリアと展示物
-      var eType = Math.floor(R2() * 27);
-      if      (eType === 0)  exGrp = buildMonolith(R2, H);
-      else if (eType === 1)  exGrp = buildSphere(R2);
-      else if (eType === 2)  exGrp = buildSculpture(R2);
-      else if (eType === 3)  exGrp = buildCanvasArt(R2);
-      else if (eType === 4)  exGrp = buildBench(R2);
-      else if (eType === 5)  exGrp = buildWaterFeature(R2);
-      else if (eType === 6)  exGrp = buildPlant(R2);
-      else if (eType === 7)  exGrp = buildStairs(R2, H);
-      else if (eType === 8)  exGrp = buildSpiralStairs(R2, H);
-      else if (eType === 9)  exGrp = buildPipes(R2, H);
-      else if (eType === 10) exGrp = buildObelisk(R2, H);
-      else if (eType === 11) exGrp = buildTorus(R2);
-      else if (eType === 12) exGrp = buildNeonFrame(R2);
-      else if (eType === 13) exGrp = buildArch(R2, H);
-      else if (eType === 14) exGrp = buildPyramid(R2);
-      else if (eType === 15) exGrp = buildMirrorPillar(R2, H);
-      else if (eType === 16) exGrp = buildCrystal(R2);
-      else if (eType === 17) exGrp = buildStackedBoxes(R2);
-      else if (eType === 18) exGrp = buildPendulum(R2, H);
-      else if (eType === 19) exGrp = buildWireframeCube(R2);
-      else if (eType === 20) exGrp = buildOrb(R2, H);
-      else if (eType === 21) exGrp = buildSlab(R2);
-      else if (eType === 22) exGrp = buildAppleWatch(R2);
-      else if (eType === 23) exGrp = buildPipeCluster(R2, H);
-      else if (eType === 24) exGrp = buildVHSUnit(R2);
-      else if (eType === 25) exGrp = buildCRTTV(R2);
-      else                   exGrp = buildVideoTape(R2);
+      var eType=Math.floor(R2()*27);
+      if      (eType===0)  exGrp=buildMonolith(R2,H);
+      else if (eType===1)  exGrp=buildSphere(R2);
+      else if (eType===2)  exGrp=buildSculpture(R2);
+      else if (eType===3)  exGrp=buildCanvasArt(R2);
+      else if (eType===4)  exGrp=buildBench(R2);
+      else if (eType===5)  exGrp=buildWaterFeature(R2);
+      else if (eType===6)  exGrp=buildPlant(R2);
+      else if (eType===7)  exGrp=buildStairs(R2,H);
+      else if (eType===8)  exGrp=buildSpiralStairs(R2,H);
+      else if (eType===9)  exGrp=buildPipes(R2,H);
+      else if (eType===10) exGrp=buildObelisk(R2,H);
+      else if (eType===11) exGrp=buildTorus(R2);
+      else if (eType===12) exGrp=buildNeonFrame(R2);
+      else if (eType===13) exGrp=buildArch(R2,H);
+      else if (eType===14) exGrp=buildPyramid(R2);
+      else if (eType===15) exGrp=buildMirrorPillar(R2,H);
+      else if (eType===16) exGrp=buildCrystal(R2);
+      else if (eType===17) exGrp=buildStackedBoxes(R2);
+      else if (eType===18) exGrp=buildPendulum(R2,H);
+      else if (eType===19) exGrp=buildWireframeCube(R2);
+      else if (eType===20) exGrp=buildOrb(R2,H);
+      else if (eType===21) exGrp=buildSlab(R2);
+      else if (eType===22) exGrp=buildAppleWatch(R2);
+      else if (eType===23) exGrp=buildPipeCluster(R2,H);
+      else if (eType===24) exGrp=buildVHSUnit(R2);
+      else if (eType===25) exGrp=buildCRTTV(R2);
+      else                 exGrp=buildVideoTape(R2);
     }
-    
-    // オブジェクトが巨大化しても壁にめり込まないよう、余裕を持たせる
-    var marginW = isMega ? 20 : 4;
-    var marginD = isMega ? 20 : 6;
+    var mW=isMega?20:4, mD2=isMega?20:6;
     exGrp.position.set(
-      (R2() - 0.5) * Math.max(0, W - marginW),
-      0,
-      (R2() - 0.5) * Math.max(0, D - marginD)
+      (R2()-0.5)*Math.max(0,W-mW), 0,
+      (R2()-0.5)*Math.max(0,D-mD2)
     );
-    exGrp.rotation.y = R2() * Math.PI * 2;
+    exGrp.rotation.y = R2()*Math.PI*2;
     grp.add(exGrp);
   }
 
-  /* ---- door trigger data (room-local coords) ---- */
-  var doors = [
-    { wall: 'front', dx: frontDX, dz: 0,      seed: Math.floor(R2() * 99991) + 1 }
-  ];
-  if (hasDoorBack)
-    doors.push({ wall: 'back',  dx: backDX,  dz: 0,      seed: Math.floor(R2() * 99991) + 1 });
-  if (hasDoorLeft)
-    doors.push({ wall: 'left',  dx: 0,       dz: leftDZ, seed: Math.floor(R2() * 99991) + 1 });
-  if (hasDoorRight)
-    doors.push({ wall: 'right', dx: 0,       dz: rightDZ, seed: Math.floor(R2() * 99991) + 1 });
+  // ---- room info label ----
+  var roomInfoEl2 = document.getElementById('room-info');
+  var shapeLabel = { rect:'ROOM',hex:'HEX',cylinder:'CYLINDER',dome:'DOME',
+    lshape:'L-SHAPE',cross:'CROSS',atrium:'ATRIUM',cave:'CAVE',
+    brutalist:'BRUTALIST',narrow:'CORRIDOR',octagon:'OCTAGON',vault:'VAULT' };
 
-  return { group: grp, W: W, D: D, H: H, hw: hw, hd: hd,
-           DOOR_W: DOOR_W, DOOR_H: DOOR_H, doors: doors,
-           fogNear: fogNear, fogFar: fogFar }; // 動的フォグのパラメータを返す
+  // ---- door trigger data ----
+  var doors = [{ wall:'front', dx:frontDX, dz:0, seed:Math.floor(R2()*99991)+1 }];
+  if (hasDoorBack)  doors.push({ wall:'back',  dx:backDX,  dz:0,      seed:Math.floor(R2()*99991)+1 });
+  if (hasDoorLeft)  doors.push({ wall:'left',  dx:0,       dz:leftDZ, seed:Math.floor(R2()*99991)+1 });
+  if (hasDoorRight) doors.push({ wall:'right', dx:0,       dz:rightDZ,seed:Math.floor(R2()*99991)+1 });
+
+  return { group:grp, W:W, D:D, H:H, hw:hw, hd:hd,
+           DOOR_W:DOOR_W, DOOR_H:DOOR_H, doors:doors,
+           shapeType:shapeType, shapeLabel:shapeLabel,
+           fogNear:fogNear, fogFar:fogFar };
 }
 
 /* ----------------------------------------------------------
@@ -1877,7 +2175,9 @@ function enterDoor(door) {
     yaw       = 0;
 
     roomNum++;
-    roomInfoEl.textContent = 'ROOM ' + String(roomNum).padStart(3, '0');
+    var sl2 = currentRoom.shapeLabel || {};
+    var sname = sl2[currentRoom.shapeType] || 'ROOM';
+    roomInfoEl.textContent = sname + ' ' + String(roomNum).padStart(3, '0');
 
     setTimeout(function () {
       fadeEl.style.opacity = '0';
