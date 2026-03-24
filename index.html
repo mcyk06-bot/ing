@@ -201,27 +201,25 @@ function makeWallTex(r, g, b) {
     cx.stroke();
   }
 
-  // --- 新規追加: 壁のテクスチャスタイル分岐 ---
   var style = Math.floor(Math.random() * 4);
-  if (style === 1) { // 漆喰風 (Stucco)
+  if (style === 1) { 
     cx.fillStyle = 'rgba(255,255,255,0.06)';
     for(var j=0; j<40; j++) {
       cx.beginPath();
       cx.arc(Math.random()*S, Math.random()*S, 40+Math.random()*120, 0, Math.PI*2);
       cx.fill();
     }
-  } else if (style === 2) { // コンクリ風 (Concrete)
+  } else if (style === 2) { 
     cx.fillStyle = 'rgba(0,0,0,0.04)';
     for(var j=0; j<15000; j++) { cx.fillRect(Math.random()*S, Math.random()*S, 1, 1); }
     cx.strokeStyle = 'rgba(0,0,0,0.1)'; cx.lineWidth = 0.8;
     for(var j=0; j<8; j++) {
       cx.beginPath(); cx.moveTo(Math.random()*S, 0); cx.lineTo(Math.random()*S, S); cx.stroke();
     }
-  } else if (style === 3) { // 壁紙風 (Wallpaper - Stripes)
+  } else if (style === 3) { 
     cx.fillStyle = 'rgba(255,255,255,0.05)';
     for(var j=0; j<S; j+=24) { cx.fillRect(j, 0, 12, S); }
   }
-  // ------------------------------------------
 
   var grad = cx.createRadialGradient(0, S, 0, 0, S, S * 0.4);
   grad.addColorStop(
@@ -249,10 +247,8 @@ function makeFloorTex(r, g, b) {
     = 'rgba(' + (r-55) + ',' + (g-55) + ',' + (b-55) + ',0.55)';
   cx.lineWidth = 2.5;
 
-  // --- 新規追加: 床のテクスチャスタイル分岐 ---
   var style = Math.floor(Math.random() * 3);
   if (style === 0 || style === 2) { 
-    // オリジナルのタイル描画
     for (x = 0; x <= S; x += TS) {
       cx.beginPath(); cx.moveTo(x, 0); cx.lineTo(x, S); cx.stroke();
     }
@@ -270,11 +266,9 @@ function makeFloorTex(r, g, b) {
       }
     }
   } else if (style === 1) {
-    // コンクリ・シームレス風床
     cx.fillStyle = 'rgba(0,0,0,0.03)';
     for(var j=0; j<20000; j++) { cx.fillRect(Math.random()*S, Math.random()*S, 1.5, 1.5); }
   }
-  // ------------------------------------------
 
   var gl = cx.createLinearGradient(0, 0, S, S);
   gl.addColorStop(0,   'rgba(255,255,255,0.06)');
@@ -315,12 +309,10 @@ function makeCeilTex(r, g, b) {
     );
   }
 
-  // --- 新規追加: 天井のテクスチャスタイル分岐 ---
-  if (Math.random() > 0.5) { // 50%でストライプ（板張りやパネル風）を追加
+  if (Math.random() > 0.5) { 
     cx.fillStyle = 'rgba(0,0,0,0.04)';
     for(var j=0; j<S; j+=32) { cx.fillRect(0, j, S, 2); }
   }
-  // ------------------------------------------
 
   var t = new THREE.CanvasTexture(cv);
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
@@ -534,7 +526,7 @@ function addDetails(grp, axis, side, len, H2, hw2, hd2, R2) {
 }
 
 /* ----------------------------------------------------------
-   Exhibits
+   Exhibits & Objects
 ---------------------------------------------------------- */
 function buildMonolith(R2, H2) {
   var g    = new THREE.Group();
@@ -698,7 +690,6 @@ function buildCanvasArt(R2) {
   return g;
 }
 
-// --- 新規追加: インテリア・建築オブジェクト群 ---
 function buildBench(R2) {
   var g = new THREE.Group();
   var w = 1.5 + R2() * 1.5;
@@ -790,6 +781,38 @@ function buildPipes(R2, H) {
   g.add(pipe2);
   return g;
 }
+
+// --- 新規追加: メガ・ルーム用巨大オブジェクト群 ---
+function buildMegaSphere(R2, H) {
+  var g = new THREE.Group();
+  var r = 10 + R2() * 15;
+  var mat = matStd(0x0a0a0a, 1.0, 0.0); // 光を完全に吸収する漆黒のマット質感
+  var s = mkMesh(new THREE.SphereGeometry(r, 64, 32), mat);
+  s.position.y = r;
+  g.add(s);
+  return g;
+}
+
+function buildMegaPillar(R2, H) {
+  var g = new THREE.Group();
+  var r = 2.5 + R2() * 5.0;
+  var mat = matStd(0x1a1a1a, 1.0, 0.0); // ざらついた重いコンクリート調
+  var p = mkMesh(new THREE.CylinderGeometry(r, r, H, 32), mat);
+  p.position.y = H / 2;
+  g.add(p);
+  return g;
+}
+
+function buildMegaCube(R2, H) {
+  var g = new THREE.Group();
+  var sz = 12 + R2() * 20;
+  var mat = matStd(0x111111, 0.95, 0.1); // 重厚で鈍い反射を持つ直方体
+  var c = mkMesh(new THREE.BoxGeometry(sz, sz, sz), mat);
+  c.position.y = sz / 2;
+  c.rotation.y = R2() * Math.PI;
+  g.add(c);
+  return g;
+}
 // ------------------------------------------
 
 /* ----------------------------------------------------------
@@ -851,12 +874,10 @@ function addDoorGlow(grp, dx, dz, dh, rotY, color) {
     color: color, emissive: c, emissiveIntensity: 1.1,
     roughness: 0.4, transparent: true, opacity: 0.9, depthWrite: false
   });
-  /* glowing bar above door */
   var bar = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 0.055), mat);
   bar.rotation.y = rotY;
   bar.position.set(dx, dh + 0.06, dz);
   grp.add(bar);
-  /* subtle point light in doorway */
   var pl = new THREE.PointLight(color, 1.4, 5.0, 2.2);
   pl.position.set(dx, dh - 0.6, dz);
   grp.add(pl);
@@ -878,7 +899,6 @@ var PALETTES = [
   { wr:196,wg:226,wb:230, fr:36,fg:86,fb:100, lc:0x30ddff, li:2.0, ac:0x10ccff, ai:0.14 },
   { wr:230,wg:216,wb:192, fr:106,fg:86,fb:60, lc:0xffc870, li:1.9, ac:0xffb850, ai:0.15 },
   { wr:10, wg:16, wb:20,  fr:20,fg:30,fb:36,  lc:0x20e8ff, li:2.3, ac:0x10ccee, ai:0.09 },
-  // --- 新規追加: 白・ライトグレー基調（北欧風・都会風） ---
   { wr:245,wg:245,wb:245, fr:220,fg:220,fb:220, lc:0xffffff, li:2.1, ac:0xffffff, ai:0.25 },
   { wr:230,wg:232,wb:230, fr:150,fg:150,fb:150, lc:0xddddff, li:2.2, ac:0xeeeeff, ai:0.18 },
   { wr:250,wg:245,wb:240, fr:200,fg:180,fb:160, lc:0xffeedd, li:2.0, ac:0xffeedd, ai:0.22 }
@@ -886,9 +906,16 @@ var PALETTES = [
 
 function buildRoom(seed) {
   var R2  = makeRng(seed);
-  var W   = 16 + R2() * 36;
-  var D   = 22 + R2() * 62;
-  var H   = 5  + R2() * 9;
+  
+  // --- 新規追加: メガ・ルーム（巨大空間）の判定とサイズ変更 ---
+  var isMega = R2() > 0.75; // 25%の確率でメガ・ルーム
+  var W   = isMega ? 60 + R2() * 120 : 16 + R2() * 36;
+  var D   = isMega ? 80 + R2() * 140 : 22 + R2() * 62;
+  var H   = isMega ? 30 + R2() * 50  : 5  + R2() * 9;
+  var fogNear = isMega ? 20 + R2() * 20 : 12; // 柔らかい空気感を演出する動的フォグ
+  var fogFar  = isMega ? D * 0.8 + 40   : 90;
+  // ------------------------------------------------------------
+  
   var hw  = W / 2, hd = D / 2;
   var DOOR_W = 2.1 + R2() * 0.7;
   var DOOR_H = 2.5 + R2() * 0.6;
@@ -1007,26 +1034,38 @@ function buildRoom(seed) {
     }
   }
 
-  /* ---- exhibits (一部変更: 新規オブジェクトの追加) ---- */
-  var exCount = 3 + Math.floor(R2() * 9);
+  /* ---- exhibits (一部変更: メガ・ルーム用オブジェクトの分岐追加) ---- */
+  var exCount = isMega ? (1 + Math.floor(R2() * 3)) : (3 + Math.floor(R2() * 9));
   for (var ei = 0; ei < exCount; ei++) {
-    var eType = Math.floor(R2() * 10); // 分岐を10種類に拡張
     var exGrp;
-    if      (eType === 0) exGrp = buildMonolith(R2, H);
-    else if (eType === 1) exGrp = buildSphere(R2);
-    else if (eType === 2) exGrp = buildSculpture(R2);
-    else if (eType === 3) exGrp = buildCanvasArt(R2);
-    else if (eType === 4) exGrp = buildBench(R2);
-    else if (eType === 5) exGrp = buildWaterFeature(R2);
-    else if (eType === 6) exGrp = buildPlant(R2);
-    else if (eType === 7) exGrp = buildStairs(R2, H);
-    else if (eType === 8) exGrp = buildSpiralStairs(R2, H);
-    else                  exGrp = buildPipes(R2, H);
+    if (isMega) {
+      // 巨大空間専用の圧倒的なオブジェクト
+      var mType = Math.floor(R2() * 3);
+      if      (mType === 0) exGrp = buildMegaSphere(R2, H);
+      else if (mType === 1) exGrp = buildMegaPillar(R2, H);
+      else                  exGrp = buildMegaCube(R2, H);
+    } else {
+      // 通常のインテリアと展示物
+      var eType = Math.floor(R2() * 10);
+      if      (eType === 0) exGrp = buildMonolith(R2, H);
+      else if (eType === 1) exGrp = buildSphere(R2);
+      else if (eType === 2) exGrp = buildSculpture(R2);
+      else if (eType === 3) exGrp = buildCanvasArt(R2);
+      else if (eType === 4) exGrp = buildBench(R2);
+      else if (eType === 5) exGrp = buildWaterFeature(R2);
+      else if (eType === 6) exGrp = buildPlant(R2);
+      else if (eType === 7) exGrp = buildStairs(R2, H);
+      else if (eType === 8) exGrp = buildSpiralStairs(R2, H);
+      else                  exGrp = buildPipes(R2, H);
+    }
     
+    // オブジェクトが巨大化しても壁にめり込まないよう、余裕を持たせる
+    var marginW = isMega ? 20 : 4;
+    var marginD = isMega ? 20 : 6;
     exGrp.position.set(
-      (R2() - 0.5) * (W - 4),
+      (R2() - 0.5) * Math.max(0, W - marginW),
       0,
-      (R2() - 0.5) * (D - 6)
+      (R2() - 0.5) * Math.max(0, D - marginD)
     );
     exGrp.rotation.y = R2() * Math.PI * 2;
     grp.add(exGrp);
@@ -1044,7 +1083,8 @@ function buildRoom(seed) {
     doors.push({ wall: 'right', dx: 0,       dz: rightDZ, seed: Math.floor(R2() * 99991) + 1 });
 
   return { group: grp, W: W, D: D, H: H, hw: hw, hd: hd,
-           DOOR_W: DOOR_W, DOOR_H: DOOR_H, doors: doors };
+           DOOR_W: DOOR_W, DOOR_H: DOOR_H, doors: doors,
+           fogNear: fogNear, fogFar: fogFar }; // 動的フォグのパラメータを返す
 }
 
 /* ----------------------------------------------------------
@@ -1079,6 +1119,11 @@ function enterDoor(door) {
   setTimeout(function () {
     scene.remove(currentRoom.group);
     currentRoom = spawnRoom(door.seed);
+
+    // --- 新規追加: 部屋のサイズに合わせてフォグ（空気感）を動的に変更 ---
+    scene.fog.near = currentRoom.fogNear;
+    scene.fog.far  = currentRoom.fogFar;
+    // ----------------------------------------------------------------
 
     /* slight Y jolt — the "step through" feel */
     camera.position.set(0, 1.72 + (Math.random() - 0.5) * 0.14, currentRoom.hd - 2.5);
@@ -1136,6 +1181,12 @@ function checkDoorHint() {
 ---------------------------------------------------------- */
 setProgress(20);
 currentRoom = spawnRoom(Math.floor(Math.random() * 99991) + 1);
+
+// --- 新規追加: 初期のフォグ適用 ---
+scene.fog.near = currentRoom.fogNear;
+scene.fog.far  = currentRoom.fogFar;
+// ----------------------------------
+
 setProgress(80);
 camera.position.set(0, 1.72, currentRoom.hd - 2.5);
 camera.rotation.order = 'YXZ';
