@@ -105,7 +105,6 @@ canvas.locked{cursor:none}
 <div id="room-info">ROOM 001</div>
 <div id="door-hint">— EXIT —</div>
 <div id="pc-hint">CLICK TO ENTER</div>
-<!-- mobile controls -->
 <div id="stick-zone"><div id="stick-ring"><div id="stick-knob"></div></div></div>
 <div id="look-right"></div>
 <div id="fade"></div>
@@ -201,6 +200,29 @@ function makeWallTex(r, g, b) {
     cx.lineTo(S, y + Math.random() * 8 - 4);
     cx.stroke();
   }
+
+  // --- 新規追加: 壁のテクスチャスタイル分岐 ---
+  var style = Math.floor(Math.random() * 4);
+  if (style === 1) { // 漆喰風 (Stucco)
+    cx.fillStyle = 'rgba(255,255,255,0.06)';
+    for(var j=0; j<40; j++) {
+      cx.beginPath();
+      cx.arc(Math.random()*S, Math.random()*S, 40+Math.random()*120, 0, Math.PI*2);
+      cx.fill();
+    }
+  } else if (style === 2) { // コンクリ風 (Concrete)
+    cx.fillStyle = 'rgba(0,0,0,0.04)';
+    for(var j=0; j<15000; j++) { cx.fillRect(Math.random()*S, Math.random()*S, 1, 1); }
+    cx.strokeStyle = 'rgba(0,0,0,0.1)'; cx.lineWidth = 0.8;
+    for(var j=0; j<8; j++) {
+      cx.beginPath(); cx.moveTo(Math.random()*S, 0); cx.lineTo(Math.random()*S, S); cx.stroke();
+    }
+  } else if (style === 3) { // 壁紙風 (Wallpaper - Stripes)
+    cx.fillStyle = 'rgba(255,255,255,0.05)';
+    for(var j=0; j<S; j+=24) { cx.fillRect(j, 0, 12, S); }
+  }
+  // ------------------------------------------
+
   var grad = cx.createRadialGradient(0, S, 0, 0, S, S * 0.4);
   grad.addColorStop(
     0,
@@ -226,22 +248,34 @@ function makeFloorTex(r, g, b) {
   cx.strokeStyle
     = 'rgba(' + (r-55) + ',' + (g-55) + ',' + (b-55) + ',0.55)';
   cx.lineWidth = 2.5;
-  for (x = 0; x <= S; x += TS) {
-    cx.beginPath(); cx.moveTo(x, 0); cx.lineTo(x, S); cx.stroke();
-  }
-  for (y = 0; y <= S; y += TS) {
-    cx.beginPath(); cx.moveTo(0, y); cx.lineTo(S, y); cx.stroke();
-  }
-  var tx, ty;
-  for (ty = 0; ty < 4; ty++) {
-    for (tx = 0; tx < 4; tx++) {
-      v = (Math.random() - 0.5) * 20;
-      cx.fillStyle = 'rgba('
-        + Math.floor(r + v) + ',' + Math.floor(g + v) + ','
-        + Math.floor(b + v) + ',0.22)';
-      cx.fillRect(tx * TS + 3, ty * TS + 3, TS - 6, TS - 6);
+
+  // --- 新規追加: 床のテクスチャスタイル分岐 ---
+  var style = Math.floor(Math.random() * 3);
+  if (style === 0 || style === 2) { 
+    // オリジナルのタイル描画
+    for (x = 0; x <= S; x += TS) {
+      cx.beginPath(); cx.moveTo(x, 0); cx.lineTo(x, S); cx.stroke();
     }
+    for (y = 0; y <= S; y += TS) {
+      cx.beginPath(); cx.moveTo(0, y); cx.lineTo(S, y); cx.stroke();
+    }
+    var tx, ty;
+    for (ty = 0; ty < 4; ty++) {
+      for (tx = 0; tx < 4; tx++) {
+        v = (Math.random() - 0.5) * 20;
+        cx.fillStyle = 'rgba('
+          + Math.floor(r + v) + ',' + Math.floor(g + v) + ','
+          + Math.floor(b + v) + ',0.22)';
+        cx.fillRect(tx * TS + 3, ty * TS + 3, TS - 6, TS - 6);
+      }
+    }
+  } else if (style === 1) {
+    // コンクリ・シームレス風床
+    cx.fillStyle = 'rgba(0,0,0,0.03)';
+    for(var j=0; j<20000; j++) { cx.fillRect(Math.random()*S, Math.random()*S, 1.5, 1.5); }
   }
+  // ------------------------------------------
+
   var gl = cx.createLinearGradient(0, 0, S, S);
   gl.addColorStop(0,   'rgba(255,255,255,0.06)');
   gl.addColorStop(0.5, 'rgba(255,255,255,0.0)');
@@ -280,6 +314,14 @@ function makeCeilTex(r, g, b) {
       Math.random() * 1.8, Math.random() * 1.8
     );
   }
+
+  // --- 新規追加: 天井のテクスチャスタイル分岐 ---
+  if (Math.random() > 0.5) { // 50%でストライプ（板張りやパネル風）を追加
+    cx.fillStyle = 'rgba(0,0,0,0.04)';
+    for(var j=0; j<S; j+=32) { cx.fillRect(0, j, S, 2); }
+  }
+  // ------------------------------------------
+
   var t = new THREE.CanvasTexture(cv);
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
   return t;
@@ -656,6 +698,99 @@ function buildCanvasArt(R2) {
   return g;
 }
 
+// --- 新規追加: インテリア・建築オブジェクト群 ---
+function buildBench(R2) {
+  var g = new THREE.Group();
+  var w = 1.5 + R2() * 1.5;
+  var h = 0.4 + R2() * 0.2;
+  var d = 0.4 + R2() * 0.2;
+  var mat = matStd(0xeeeeee, 0.9, 0.1); 
+  var top = mkMesh(new THREE.BoxGeometry(w, 0.05, d), mat);
+  top.position.y = h;
+  g.add(top);
+  var leg1 = mkMesh(new THREE.BoxGeometry(0.05, h, d * 0.8), mat);
+  leg1.position.set(-w/2 + 0.2, h/2, 0);
+  g.add(leg1);
+  var leg2 = mkMesh(new THREE.BoxGeometry(0.05, h, d * 0.8), mat);
+  leg2.position.set(w/2 - 0.2, h/2, 0);
+  g.add(leg2);
+  return g;
+}
+
+function buildWaterFeature(R2) {
+  var g = new THREE.Group();
+  var w = 2.0 + R2() * 3.0;
+  var d = 2.0 + R2() * 3.0;
+  var base = mkMesh(new THREE.BoxGeometry(w, 0.2, d), matStd(0x333333, 0.8, 0.2));
+  base.position.y = 0.1;
+  g.add(base);
+  var waterMat = new THREE.MeshStandardMaterial({ color: 0x88ccff, transparent: true, opacity: 0.7, roughness: 0.1, metalness: 0.8 });
+  var water = new THREE.Mesh(new THREE.BoxGeometry(w - 0.1, 0.21, d - 0.1), waterMat);
+  water.position.y = 0.1;
+  g.add(water);
+  return g;
+}
+
+function buildPlant(R2) {
+  var g = new THREE.Group();
+  var pot = mkMesh(new THREE.CylinderGeometry(0.2, 0.15, 0.4, 16), matStd(0xdddddd, 0.9, 0.0));
+  pot.position.y = 0.2;
+  g.add(pot);
+  var leaves = mkMesh(new THREE.SphereGeometry(0.4 + R2() * 0.3, 8, 8), matStd(0x2d4c1e, 0.8, 0.1));
+  leaves.position.y = 0.6 + R2() * 0.4;
+  g.add(leaves);
+  return g;
+}
+
+function buildStairs(R2, H) {
+  var g = new THREE.Group();
+  var steps = 10 + Math.floor(R2() * 15);
+  var stepH = 0.15 + R2() * 0.05;
+  var stepD = 0.25 + R2() * 0.05;
+  var w = 1.0 + R2() * 1.0;
+  var mat = matStd(0xdddddd, 0.8, 0.1);
+  for(var i=0; i<steps; i++) {
+    var step = mkMesh(new THREE.BoxGeometry(w, stepH, stepD), mat);
+    step.position.set(0, i * stepH + stepH/2, -i * stepD);
+    g.add(step);
+  }
+  return g;
+}
+
+function buildSpiralStairs(R2, H) {
+  var g = new THREE.Group();
+  var steps = 20 + Math.floor(R2() * 20);
+  var mat = matStd(0xcccccc, 0.7, 0.2);
+  var center = mkMesh(new THREE.CylinderGeometry(0.1, 0.1, steps * 0.15, 8), mat);
+  center.position.y = steps * 0.15 / 2;
+  g.add(center);
+  for(var i=0; i<steps; i++) {
+    var step = mkMesh(new THREE.BoxGeometry(1.2, 0.05, 0.3), mat);
+    step.position.set(0.6, i * 0.15 + 0.025, 0);
+    var pivot = new THREE.Group();
+    pivot.position.y = i * 0.15;
+    pivot.rotation.y = i * 0.4;
+    pivot.add(step);
+    g.add(pivot);
+  }
+  return g;
+}
+
+function buildPipes(R2, H) {
+  var g = new THREE.Group();
+  var h = 2.0 + R2() * (H - 2.0);
+  var mat = matStd(0x888888, 0.4, 0.8);
+  var pipe1 = mkMesh(new THREE.CylinderGeometry(0.08, 0.08, h, 8), mat);
+  pipe1.position.y = h/2;
+  g.add(pipe1);
+  var w = 1.0 + R2() * 2.0;
+  var pipe2 = mkMesh(new THREE.CylinderGeometry(0.08, 0.08, w, 8), mat);
+  pipe2.rotation.z = Math.PI / 2;
+  pipe2.position.set(w/2, h, 0);
+  g.add(pipe2);
+  return g;
+}
+// ------------------------------------------
 
 /* ----------------------------------------------------------
    Room builder helpers
@@ -728,7 +863,7 @@ function addDoorGlow(grp, dx, dz, dh, rotY, color) {
 }
 
 /* ----------------------------------------------------------
-   Room builder — 12 dramatic palettes
+   Room builder — 12 dramatic palettes + 白基調追加
 ---------------------------------------------------------- */
 var PALETTES = [
   { wr:235,wg:228,wb:218, fr:90,fg:74,fb:58,  lc:0xffe8c0, li:2.0, ac:0xfff0d8, ai:0.18 },
@@ -743,6 +878,10 @@ var PALETTES = [
   { wr:196,wg:226,wb:230, fr:36,fg:86,fb:100, lc:0x30ddff, li:2.0, ac:0x10ccff, ai:0.14 },
   { wr:230,wg:216,wb:192, fr:106,fg:86,fb:60, lc:0xffc870, li:1.9, ac:0xffb850, ai:0.15 },
   { wr:10, wg:16, wb:20,  fr:20,fg:30,fb:36,  lc:0x20e8ff, li:2.3, ac:0x10ccee, ai:0.09 },
+  // --- 新規追加: 白・ライトグレー基調（北欧風・都会風） ---
+  { wr:245,wg:245,wb:245, fr:220,fg:220,fb:220, lc:0xffffff, li:2.1, ac:0xffffff, ai:0.25 },
+  { wr:230,wg:232,wb:230, fr:150,fg:150,fb:150, lc:0xddddff, li:2.2, ac:0xeeeeff, ai:0.18 },
+  { wr:250,wg:245,wb:240, fr:200,fg:180,fb:160, lc:0xffeedd, li:2.0, ac:0xffeedd, ai:0.22 }
 ];
 
 function buildRoom(seed) {
@@ -868,15 +1007,22 @@ function buildRoom(seed) {
     }
   }
 
-  /* ---- exhibits ---- */
+  /* ---- exhibits (一部変更: 新規オブジェクトの追加) ---- */
   var exCount = 3 + Math.floor(R2() * 9);
   for (var ei = 0; ei < exCount; ei++) {
-    var eType = Math.floor(R2() * 4);
+    var eType = Math.floor(R2() * 10); // 分岐を10種類に拡張
     var exGrp;
     if      (eType === 0) exGrp = buildMonolith(R2, H);
     else if (eType === 1) exGrp = buildSphere(R2);
     else if (eType === 2) exGrp = buildSculpture(R2);
-    else                  exGrp = buildCanvasArt(R2);
+    else if (eType === 3) exGrp = buildCanvasArt(R2);
+    else if (eType === 4) exGrp = buildBench(R2);
+    else if (eType === 5) exGrp = buildWaterFeature(R2);
+    else if (eType === 6) exGrp = buildPlant(R2);
+    else if (eType === 7) exGrp = buildStairs(R2, H);
+    else if (eType === 8) exGrp = buildSpiralStairs(R2, H);
+    else                  exGrp = buildPipes(R2, H);
+    
     exGrp.position.set(
       (R2() - 0.5) * (W - 4),
       0,
