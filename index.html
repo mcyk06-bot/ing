@@ -222,7 +222,8 @@ var renderer = new THREE.WebGLRenderer({
 });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.shadowMap.enabled   = false;
+renderer.shadowMap.enabled   = true;
+renderer.shadowMap.type      = THREE.PCFSoftShadowMap;
 renderer.toneMapping         = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 2.1;
 renderer.outputEncoding      = THREE.sRGBEncoding;
@@ -236,10 +237,96 @@ var camera = new THREE.PerspectiveCamera(
 );
 camera.position.set(0, 1.72, 0);
 
+/* ----------------------------------------------------------
+   VHS Post-processing
+---------------------------------------------------------- */
+var vhsTarget = new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight, {
+  minFilter: THREE.LinearFilter,
+  magFilter: THREE.LinearFilter,
+  format: THREE.RGBAFormat
+});
+var vhsTime = 0;
+
+var VHS_VERT = [
+  'varying vec2 vUv;',
+  'void main() { vUv = uv; gl_Position = vec4(position, 1.0); }'
+].join('\n');
+
+var VHS_FRAG = [
+  'uniform sampler2D tDiffuse;',
+  'uniform float time;',
+  'uniform vec2 resolution;',
+  'varying vec2 vUv;',
+  'float rand(vec2 co) {',
+  '  return fract(sin(dot(co.xy,vec2(12.9898,78.233)))*43758.5453);',
+  '}',
+  'void main() {',
+  '  vec2 uv = vUv;',
+  /* barrel distortion */
+  '  vec2 cc = uv - 0.5;',
+  '  float dist = dot(cc,cc);',
+  '  uv = uv + cc*(dist*0.055);',
+  '  if(uv.x<0.0||uv.x>1.0||uv.y<0.0||uv.y>1.0){',
+  '    gl_FragColor=vec4(0.0,0.0,0.0,1.0); return;',
+  '  }',
+  /* chromatic aberration */
+  '  float edge = dot(cc,cc)*3.0;',
+  '  float shift = 0.0035*edge + 0.0007*sin(time*0.4);',
+  '  vec4 col;',
+  '  col.r = texture2D(tDiffuse, uv+vec2( shift, shift*0.3)).r;',
+  '  col.g = texture2D(tDiffuse, uv).g;',
+  '  col.b = texture2D(tDiffuse, uv-vec2( shift, shift*0.3)).b;',
+  '  col.a = 1.0;',
+  /* scanlines */
+  '  float scan = sin(uv.y*resolution.y*1.1)*0.030;',
+  '  col.rgb -= clamp(scan,0.0,1.0);',
+  /* horizontal glitch band */
+  '  float gs = floor(time*0.6);',
+  '  float doGlitch = step(0.97, rand(vec2(gs,3.7)));',
+  '  float bandY = rand(vec2(gs,5.1));',
+  '  float bandH = 0.007+rand(vec2(gs,9.3))*0.016;',
+  '  if(doGlitch>0.0 && abs(uv.y-bandY)<bandH){',
+  '    float hs=(rand(vec2(uv.y*50.0,gs))-0.5)*0.022;',
+  '    vec4 gc=texture2D(tDiffuse,vec2(fract(uv.x+hs),uv.y));',
+  '    col.rgb=gc.rgb+vec3(0.07,0.04,0.0);',
+  '  }',
+  /* film grain */
+  '  float grain=rand(uv+fract(time*0.007))-0.5;',
+  '  col.rgb += grain*0.038;',
+  /* vignette */
+  '  float vig=1.0-dot(cc*1.5,cc*1.5);',
+  '  vig=clamp(vig,0.0,1.0);',
+  '  col.rgb *= pow(vig,0.36);',
+  /* VHS color tint */
+  '  float luma=dot(col.rgb,vec3(0.299,0.587,0.114));',
+  '  col.rgb=mix(col.rgb,vec3(luma),0.10);',
+  '  col.rgb*=vec3(0.97,0.985,0.93);',
+  '  gl_FragColor=col;',
+  '}'
+].join('\n');
+
+var vhsMaterial = new THREE.ShaderMaterial({
+  uniforms: {
+    tDiffuse:   { value: null },
+    time:       { value: 0.0 },
+    resolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) }
+  },
+  vertexShader:   VHS_VERT,
+  fragmentShader: VHS_FRAG,
+  depthWrite: false,
+  depthTest: false
+});
+var vhsQuad   = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), vhsMaterial);
+var vhsScene  = new THREE.Scene();
+var vhsCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+vhsScene.add(vhsQuad);
+
 window.addEventListener('resize', function () {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
+  vhsTarget.setSize(window.innerWidth, window.innerHeight);
+  vhsMaterial.uniforms.resolution.value.set(window.innerWidth, window.innerHeight);
 });
 
 /* ----------------------------------------------------------
@@ -1962,6 +2049,11 @@ function buildCreature(R2) {
   g.userData.eyePl = eyePl;
   g.userData.baseY = 0;
   g.userData.phase = R2() * Math.PI * 2;
+  // Wander AI
+  g.userData.wanderTarget = new THREE.Vector3(0, 0, 0);
+  g.userData.wanderSpeed  = 0.008 + R2() * 0.005;   // very slow creep
+  g.userData.wanderTimer  = 2.0 + R2() * 4.0;        // seconds until first move
+  g.userData.wanderFacing = 0;
 
   var shd = mkMesh(new THREE.CircleGeometry(0.42, 16),
     new THREE.MeshStandardMaterial({color:0x000000,transparent:true,opacity:0.22,roughness:1,depthWrite:false}));
@@ -2088,13 +2180,47 @@ function updateInteractables(dt) {
           showShoot = true;
         }
       }
-      // Animate creature bob + eye flicker
+      // Animate creature bob + eye flicker + wander
       if (it.mesh) {
-        it.mesh.userData.phase = (it.mesh.userData.phase || 0) + dt * 1.2;
-        it.mesh.position.y = it.mesh.userData.baseY + Math.sin(it.mesh.userData.phase) * 0.06;
-        it.mesh.rotation.y += dt * 0.18;
-        if (it.mesh.userData.eyePl) {
-          it.mesh.userData.eyePl.intensity = 1.2 + Math.sin(it.mesh.userData.phase * 3.1) * 0.4;
+        var ud = it.mesh.userData;
+        ud.phase = (ud.phase || 0) + dt * 1.2;
+        it.mesh.position.y = ud.baseY + Math.sin(ud.phase) * 0.06;
+
+        // Eye flicker
+        if (ud.eyePl) {
+          ud.eyePl.intensity = 1.2 + Math.sin(ud.phase * 3.1) * 0.4;
+        }
+
+        // Wander toward target
+        ud.wanderTimer -= dt;
+        if (ud.wanderTimer <= 0) {
+          // Pick new wandering destination within room
+          var rwHW = Math.max(1.0, currentRoom.hw - 1.5);
+          var rwHD = Math.max(1.0, currentRoom.hd - 1.5);
+          ud.wanderTarget.set(
+            (Math.random() - 0.5) * 2 * rwHW,
+            0,
+            (Math.random() - 0.5) * 2 * rwHD
+          );
+          ud.wanderTimer = 10.0 + Math.random() * 16.0;
+        }
+
+        var wdx = ud.wanderTarget.x - it.mesh.position.x;
+        var wdz = ud.wanderTarget.z - it.mesh.position.z;
+        var wdist = Math.sqrt(wdx * wdx + wdz * wdz);
+        if (wdist > 0.15) {
+          var sp = ud.wanderSpeed || 0.01;
+          it.mesh.position.x += (wdx / wdist) * sp;
+          it.mesh.position.z += (wdz / wdist) * sp;
+          // Smoothly face movement direction
+          var targetFacing = Math.atan2(wdx, wdz);
+          var df = targetFacing - it.mesh.rotation.y;
+          // wrap to [-PI, PI]
+          while (df >  Math.PI) df -= Math.PI * 2;
+          while (df < -Math.PI) df += Math.PI * 2;
+          it.mesh.rotation.y += df * Math.min(1.0, dt * 2.5);
+          // Keep registered position in sync
+          it.pos.set(it.mesh.position.x, it.pos.y, it.mesh.position.z);
         }
       }
     }
@@ -2949,6 +3075,44 @@ function buildShapeVault(g, W, D, H, hw, hd, DW, DH, fDX, bDX, lDZ, rDZ, dB, dL,
 }
 
 /* ----------------------------------------------------------
+   Wall PBR roughness map generator (Step B)
+---------------------------------------------------------- */
+function makeWallRoughTex() {
+  var S  = 512;
+  var cv = document.createElement('canvas');
+  cv.width = cv.height = S;
+  var cx = cv.getContext('2d');
+  // Mid-gray base = medium roughness (0.5 in roughnessMap ≈ material.roughness * 0.5)
+  cx.fillStyle = '#aaaaaa';
+  cx.fillRect(0, 0, S, S);
+  // Bright patches = smoother spots (polished)
+  for (var i = 0; i < 6000; i++) {
+    var v = Math.floor(160 + Math.random() * 85);
+    cx.fillStyle = 'rgba(' + v + ',' + v + ',' + v + ',' + (0.04 + Math.random() * 0.07) + ')';
+    cx.fillRect(Math.random() * S, Math.random() * S, Math.random() * 3.5 + 0.5, Math.random() * 3.5 + 0.5);
+  }
+  // Dark seams = rougher joints
+  for (var j = 0; j < 50; j++) {
+    var ly = Math.random() * S;
+    cx.strokeStyle = 'rgba(40,40,40,' + (0.08 + Math.random() * 0.14) + ')';
+    cx.lineWidth = Math.random() * 2.2 + 0.4;
+    cx.beginPath();
+    cx.moveTo(0, ly);
+    cx.lineTo(S, ly + (Math.random() - 0.5) * 12);
+    cx.stroke();
+  }
+  // Corner darkening = rough grime
+  var grad = cx.createRadialGradient(0, S, 0, 0, S, S * 0.38);
+  grad.addColorStop(0, 'rgba(30,30,30,0.22)');
+  grad.addColorStop(1, 'rgba(0,0,0,0)');
+  cx.fillStyle = grad;
+  cx.fillRect(0, 0, S, S);
+  var t = new THREE.CanvasTexture(cv);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  return t;
+}
+
+/* ----------------------------------------------------------
    Room builder — multi-shape
 ---------------------------------------------------------- */
 function buildRoom(seed) {
@@ -2986,13 +3150,15 @@ function buildRoom(seed) {
 
   var wallTex  = makeWallTex(pal.wr, pal.wg, pal.wb);
   wallTex.repeat.set(W/4, H/4);
+  var wallRoughTex = makeWallRoughTex();
+  wallRoughTex.repeat.set(W/4, H/4);
   var floorTex = makeFloorTex(pal.fr, pal.fg, pal.fb);
   floorTex.repeat.set(W/4, D/4);
   var ceilTex  = makeCeilTex(
     Math.max(pal.wr-14,0), Math.max(pal.wg-14,0), Math.max(pal.wb-14,0));
   ceilTex.repeat.set(W/4, D/4);
 
-  function wallMat()  { return new THREE.MeshStandardMaterial({ map:wallTex, roughness:0.84, metalness:0.0 }); }
+  function wallMat()  { return new THREE.MeshStandardMaterial({ map:wallTex, roughnessMap:wallRoughTex, roughness:0.84, metalness:0.0 }); }
   function floorMat() { return new THREE.MeshStandardMaterial({ map:floorTex, roughness:0.74, metalness:0.04 }); }
   function ceilMat()  { return new THREE.MeshStandardMaterial({ map:ceilTex, roughness:0.90, metalness:0.0 }); }
 
@@ -3117,6 +3283,11 @@ function buildRoom(seed) {
         var lx=-hw+(W/cols2)*(ci+0.5), lz=-hd+(D/rows)*(ri+0.5);
         var sl=new THREE.SpotLight(pal.lc,pal.li,H*2.5,Math.PI/5.5,0.42,1.5);
         sl.position.set(lx,H-0.1,lz); sl.target.position.set(lx,0,lz);
+        sl.castShadow = true;
+        sl.shadow.mapSize.width  = 512;
+        sl.shadow.mapSize.height = 512;
+        sl.shadow.camera.near = 0.5;
+        sl.shadow.camera.far  = H * 3;
         grp.add(sl); grp.add(sl.target);
       }
     }
@@ -3214,6 +3385,9 @@ function buildRoom(seed) {
     crMesh.position.set(crX, 0, crZ);
     crMesh.rotation.y = R2()*Math.PI*2;
     crMesh.userData.baseY = 0;
+    // Set initial wander target
+    crMesh.userData.wanderTarget.set(crX, 0, crZ);
+    crMesh.userData.wanderTimer = 2.0 + Math.random() * 3.0;
     grp.add(crMesh);
     interactables.push({ type:'creature', lx:crX, ly:0.8, lz:crZ, data:{}, mesh:crMesh });
   }
@@ -3631,7 +3805,14 @@ function animate() {
     checkDoorHint();
   }
 
+  // VHS two-pass render
+  vhsTime += dt;
+  vhsMaterial.uniforms.time.value = vhsTime;
+  renderer.setRenderTarget(vhsTarget);
   renderer.render(scene, camera);
+  renderer.setRenderTarget(null);
+  vhsMaterial.uniforms.tDiffuse.value = vhsTarget.texture;
+  renderer.render(vhsScene, vhsCamera);
   updateInteractables(dt);
   updateWaterSurfaces(dt);
 }
