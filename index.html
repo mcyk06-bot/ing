@@ -1969,13 +1969,13 @@ function buildRoom(seed) {
     ? MEGA_SHAPES[Math.floor(R2() * MEGA_SHAPES.length)]
     : ALL_SHAPES[Math.floor(R2() * ALL_SHAPES.length)];
 
-  var W, D, H;
+  var W, D, H, r0;
   if (isMega) {
-    if (shapeType==='dome'||shapeType==='cylinder') { var r0=40+R2()*40; W=D=r0*2; H=r0; }
+    if (shapeType==='dome'||shapeType==='cylinder') { r0=40+R2()*40; W=D=r0*2; H=r0; }
     else { W=60+R2()*120; D=80+R2()*140; H=30+R2()*50; }
   } else {
-    if (shapeType==='dome')     { var r0=8+R2()*14; W=D=r0*2; H=r0; }
-    else if (shapeType==='cylinder') { var r0=6+R2()*12; W=D=r0*2; H=5+R2()*10; }
+    if (shapeType==='dome')     { r0=8+R2()*14; W=D=r0*2; H=r0; }
+    else if (shapeType==='cylinder') { r0=6+R2()*12; W=D=r0*2; H=5+R2()*10; }
     else if (shapeType==='atrium')   { W=10+R2()*18; D=14+R2()*22; H=14+R2()*18; }
     else if (shapeType==='narrow')   { W=3.2+R2()*2.5; D=18+R2()*36; H=4+R2()*5; }
     else if (shapeType==='vault')    { W=8+R2()*14; D=18+R2()*28; H=6+R2()*6; }
@@ -2218,31 +2218,63 @@ function spawnRoom(seed) {
   return r;
 }
 
+function forceRecoverTransition() {
+  fadeEl.style.transition = 'opacity 0.5s ease';
+  fadeEl.style.opacity = '0';
+  transitioning = false;
+  if (document.getElementById('stick-zone')) {
+    document.getElementById('stick-zone').style.display = isMobile ? 'block' : 'none';
+  }
+}
+
 function enterDoor(door) {
   if (transitioning) return;
   transitioning = true;
   fadeEl.style.transition = 'opacity 0.35s ease';
   fadeEl.style.opacity    = '1';
 
+  // Safety net: if anything goes wrong, force-recover after 3 seconds
+  var recoveryTimer = setTimeout(function () {
+    forceRecoverTransition();
+  }, 3000);
+
   setTimeout(function () {
-    scene.remove(currentRoom.group);
-    currentRoom = spawnRoom(door.seed);
+    try {
+      scene.remove(currentRoom.group);
+      currentRoom = spawnRoom(door.seed);
 
-    // --- 新規追加: 部屋のサイズに合わせてフォグ（空気感）を動的に変更 ---
-    scene.fog.near = currentRoom.fogNear;
-    scene.fog.far  = currentRoom.fogFar;
-    // ----------------------------------------------------------------
+      scene.fog.near = currentRoom.fogNear;
+      scene.fog.far  = currentRoom.fogFar;
 
-    /* slight Y jolt — the "step through" feel */
-    camera.position.set(0, 1.72 + (Math.random() - 0.5) * 0.14, currentRoom.hd - 2.5);
-    walkPhase = Math.random() * Math.PI * 2;
-    yaw       = 0;
+      camera.position.set(0, 1.72 + (Math.random() - 0.5) * 0.14, currentRoom.hd - 2.5);
+      walkPhase = Math.random() * Math.PI * 2;
+      yaw       = 0;
 
-    roomNum++;
-    var sl2 = currentRoom.shapeLabel || {};
-    var sname = sl2[currentRoom.shapeType] || 'ROOM';
-    roomInfoEl.textContent = sname + ' ' + String(roomNum).padStart(3, '0');
+      roomNum++;
+      var sl2 = currentRoom.shapeLabel || {};
+      var sname = sl2[currentRoom.shapeType] || 'ROOM';
+      roomInfoEl.textContent = sname + ' ' + String(roomNum).padStart(3, '0');
+    } catch (e) {
+      console.warn('[enterDoor] spawnRoom error:', e);
+      // Fallback: try a different seed
+      try {
+        var fallbackSeed = Math.floor(Math.random() * 99991) + 1;
+        currentRoom = spawnRoom(fallbackSeed);
+        scene.fog.near = currentRoom.fogNear;
+        scene.fog.far  = currentRoom.fogFar;
+        camera.position.set(0, 1.72, currentRoom.hd - 2.5);
+        walkPhase = 0; yaw = 0;
+        roomNum++;
+        roomInfoEl.textContent = 'ROOM ' + String(roomNum).padStart(3, '0');
+      } catch (e2) {
+        console.error('[enterDoor] fallback also failed:', e2);
+        clearTimeout(recoveryTimer);
+        forceRecoverTransition();
+        return;
+      }
+    }
 
+    clearTimeout(recoveryTimer);
     setTimeout(function () {
       fadeEl.style.opacity = '0';
       setTimeout(function () { transitioning = false; }, 420);
