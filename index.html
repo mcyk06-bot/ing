@@ -94,6 +94,29 @@ canvas.locked{cursor:none}
   pointer-events:none;z-index:500;
   transition:opacity 0.35s ease
 }
+#next-room-btn{
+  position:fixed;bottom:32px;right:24px;
+  z-index:150;
+  background:rgba(0,0,0,0.55);
+  border:1px solid rgba(255,255,255,0.18);
+  color:rgba(255,255,255,0.6);
+  font-size:9px;letter-spacing:0.45em;
+  font-family:'Helvetica Neue',sans-serif;
+  padding:10px 18px;cursor:pointer;
+  transition:background 0.2s,color 0.2s;
+  -webkit-tap-highlight-color:transparent;
+  user-select:none
+}
+#next-room-btn:hover{background:rgba(255,255,255,0.12);color:rgba(255,255,255,0.9)}
+#speed-indicator{
+  position:fixed;top:28px;right:24px;
+  color:rgba(255,255,255,0.0);font-size:9px;
+  letter-spacing:0.4em;z-index:100;
+  pointer-events:none;
+  font-family:'Helvetica Neue',sans-serif;
+  transition:color 0.5s
+}
+#speed-indicator.running{color:rgba(255,200,100,0.5)}
 </style>
 </head>
 <body>
@@ -108,6 +131,8 @@ canvas.locked{cursor:none}
 <div id="stick-zone"><div id="stick-ring"><div id="stick-knob"></div></div></div>
 <div id="look-right"></div>
 <div id="fade"></div>
+<button id="next-room-btn">NEXT ROOM</button>
+<div id="speed-indicator">RUN</div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 'use strict';
@@ -1098,6 +1123,215 @@ function buildSlab(R2) {
   return g;
 }
 
+// ------ ユニコーン置物 ------
+function buildUnicorn(R2) {
+  var g = new THREE.Group();
+  var scale = 0.55 + R2() * 0.7;
+  var bodyCol = Math.floor(R2() * 3);
+  var mainCol = bodyCol === 0 ? 0xf8f4ff : (bodyCol === 1 ? 0xc8f0ff : 0xffe0f4);
+  var hornCol = 0xffe066;
+  var matBody = matStd(mainCol, 0.3, 0.1);
+  var matHorn = new THREE.MeshStandardMaterial({ color: hornCol, roughness: 0.15, metalness: 0.7,
+    emissive: new THREE.Color(0xffcc00), emissiveIntensity: 0.3 });
+  var matHoof = matStd(0xc0a0c0, 0.55, 0.4);
+  var matMane = matStd(bodyCol === 0 ? 0xffb0e0 : (bodyCol === 1 ? 0xffccaa : 0xb0d8ff), 0.4, 0.05);
+
+  var s = scale;
+  // Body — elongated ellipsoid via scaled sphere
+  var body = mkMesh(new THREE.SphereGeometry(0.38*s, 16, 12), matBody);
+  body.scale.set(1.55, 1.0, 1.0); body.position.y = 0.62*s; g.add(body);
+  // Neck
+  var neck = mkMesh(new THREE.CylinderGeometry(0.14*s, 0.18*s, 0.38*s, 10), matBody);
+  neck.rotation.z = -0.35; neck.position.set(0.3*s, 0.88*s, 0); g.add(neck);
+  // Head
+  var head = mkMesh(new THREE.SphereGeometry(0.18*s, 14, 10), matBody);
+  head.scale.set(1.5, 1.0, 1.0); head.position.set(0.52*s, 1.08*s, 0); g.add(head);
+  // Snout
+  var snout = mkMesh(new THREE.CylinderGeometry(0.07*s, 0.09*s, 0.14*s, 10), matBody);
+  snout.rotation.z = Math.PI/2; snout.position.set(0.69*s, 1.05*s, 0); g.add(snout);
+  // Horn
+  var horn = mkMesh(new THREE.CylinderGeometry(0, 0.055*s, 0.32*s, 8), matHorn);
+  horn.rotation.z = -0.22; horn.position.set(0.56*s, 1.32*s, 0); g.add(horn);
+  // Eyes
+  var eyeMat = matStd(0x220033, 0.8, 0.0);
+  [[-0.04*s, 0.04*s], [0.04*s, 0.04*s]].forEach(function(ep) {
+    var eye = mkMesh(new THREE.SphereGeometry(0.025*s, 8, 6), eyeMat);
+    eye.position.set(0.69*s, 1.1*s, ep[0]); g.add(eye);
+  });
+  // Legs — 4 box legs
+  [[-0.18*s,-0.16*s], [-0.18*s,0.16*s], [0.16*s,-0.16*s], [0.16*s,0.16*s]].forEach(function(lp) {
+    var legH = 0.42*s;
+    var leg = mkMesh(new THREE.BoxGeometry(0.09*s, legH, 0.09*s), matBody);
+    leg.position.set(lp[0], legH/2, lp[1]); g.add(leg);
+    var hoof = mkMesh(new THREE.BoxGeometry(0.1*s, 0.07*s, 0.11*s), matHoof);
+    hoof.position.set(lp[0], 0.035*s, lp[1]); g.add(hoof);
+  });
+  // Tail
+  var tail = mkMesh(new THREE.CylinderGeometry(0.04*s, 0.01*s, 0.44*s, 8), matMane);
+  tail.rotation.z = 0.7; tail.position.set(-0.5*s, 0.7*s, 0); g.add(tail);
+  // Mane ridge
+  for (var mi = 0; mi < 4; mi++) {
+    var mane = mkMesh(new THREE.SphereGeometry(0.07*s - mi*0.008*s, 8, 6), matMane);
+    mane.position.set(0.28*s - mi*0.1*s, 1.05*s + mi*0.04*s, 0); g.add(mane);
+  }
+  // Glow
+  var pl = new THREE.PointLight(mainCol, 0.6, s * 3.5, 2.0);
+  pl.position.y = 0.9*s; g.add(pl);
+  // Pedestal
+  var ped = mkMesh(new THREE.BoxGeometry(1.0*s, 0.1*s, 0.6*s), matStd(0xeeeae4, 0.7, 0.05));
+  ped.position.y = 0.05*s; g.add(ped);
+  var shd = mkMesh(new THREE.CircleGeometry(0.55*s, 20),
+    new THREE.MeshStandardMaterial({color:0x000000,transparent:true,opacity:0.16,roughness:1,depthWrite:false}));
+  shd.rotation.x = -Math.PI/2; shd.position.y = 0.003; g.add(shd);
+  return g;
+}
+
+// ------ オイルタイマー（砂時計型オイルランプ） ------
+function buildOilTimer(R2) {
+  var g = new THREE.Group();
+  var scale = 0.9 + R2() * 0.7;
+  var s = scale;
+  var glassCol = [0xffe8a0, 0xff8844, 0x88ddff, 0xff4499, 0x44ffaa];
+  var oilCol = glassCol[Math.floor(R2() * glassCol.length)];
+  var frameMat = matStd(0x1a1a18, 0.3, 0.85);
+  var glassMat = new THREE.MeshStandardMaterial({
+    color: oilCol, roughness: 0.05, metalness: 0.0,
+    transparent: true, opacity: 0.62,
+    emissive: new THREE.Color(oilCol), emissiveIntensity: 0.5
+  });
+  // Base plate
+  var base = mkMesh(new THREE.CylinderGeometry(0.28*s, 0.32*s, 0.06*s, 24), frameMat);
+  base.position.y = 0.03*s; g.add(base);
+  // Top plate
+  var top = mkMesh(new THREE.CylinderGeometry(0.28*s, 0.32*s, 0.06*s, 24), frameMat.clone());
+  top.position.y = 1.14*s; g.add(top);
+  // 4 frame rods
+  for (var ri = 0; ri < 4; ri++) {
+    var ra = ri * Math.PI / 2 + Math.PI/4;
+    var rod = mkMesh(new THREE.CylinderGeometry(0.025*s, 0.025*s, 1.08*s, 8), frameMat.clone());
+    rod.position.set(Math.cos(ra)*0.22*s, 0.57*s, Math.sin(ra)*0.22*s); g.add(rod);
+  }
+  // Upper glass bulb
+  var upperBulb = mkMesh(new THREE.SphereGeometry(0.2*s, 18, 14, 0, Math.PI*2, 0, Math.PI/2), glassMat);
+  upperBulb.rotation.x = Math.PI; upperBulb.position.y = 0.9*s; g.add(upperBulb);
+  // Neck
+  var neck = mkMesh(new THREE.CylinderGeometry(0.035*s, 0.035*s, 0.16*s, 10), glassMat.clone());
+  neck.position.y = 0.62*s; g.add(neck);
+  // Lower bulb (with oil filling partially)
+  var lowerBulb = mkMesh(new THREE.SphereGeometry(0.2*s, 18, 14, 0, Math.PI*2, 0, Math.PI/2), glassMat.clone());
+  lowerBulb.position.y = 0.38*s; g.add(lowerBulb);
+  // Oil level indicator (flat disc inside lower bulb)
+  var fillPct = 0.3 + R2() * 0.65;
+  var oilFill = mkMesh(new THREE.CylinderGeometry(0.16*s * fillPct, 0.16*s * fillPct, 0.01, 16),
+    new THREE.MeshStandardMaterial({color: oilCol, roughness:0.05, metalness:0.0,
+      emissive: new THREE.Color(oilCol), emissiveIntensity: 1.2, transparent:true, opacity:0.9}));
+  oilFill.position.y = 0.08*s + fillPct * 0.28*s; g.add(oilFill);
+  // Glow from oil
+  var pl = new THREE.PointLight(oilCol, 2.0, s*4.5, 2.0);
+  pl.position.y = 0.55*s; g.add(pl);
+  var shd = mkMesh(new THREE.CircleGeometry(0.35*s, 16),
+    new THREE.MeshStandardMaterial({color:0x000000,transparent:true,opacity:0.18,roughness:1,depthWrite:false}));
+  shd.rotation.x=-Math.PI/2; shd.position.y=0.003; g.add(shd);
+  return g;
+}
+
+// ------ 空調設備 (HVAC unit) ------
+function buildHVAC(R2, H) {
+  var g = new THREE.Group();
+  var type = Math.floor(R2() * 3); // 0=ceiling unit, 1=wall cassette, 2=industrial floor unit
+
+  if (type === 0) {
+    // Ceiling-mount AC — hangs from ceiling
+    var ceilH = H - 0.08;
+    var unitW = 0.85 + R2() * 0.45, unitD = 0.32, unitH = 0.18;
+    var mat = matStd(0xf0eeea, 0.75, 0.04);
+    var body = mkMesh(new THREE.BoxGeometry(unitW, unitH, unitD), mat);
+    body.position.set(0, ceilH - unitH/2, 0); g.add(body);
+    // Vent louvers
+    var nLouvers = 5;
+    for (var li = 0; li < nLouvers; li++) {
+      var louver = mkMesh(new THREE.BoxGeometry(unitW * 0.85, 0.015, 0.07), matStd(0xdddddb, 0.7, 0.0));
+      louver.rotation.x = 0.25;
+      louver.position.set(0, ceilH - unitH + 0.02, unitD/2 - 0.035 - li * 0.05); g.add(louver);
+    }
+    // LED strip
+    var led = mkMesh(new THREE.BoxGeometry(unitW * 0.7, 0.012, 0.01),
+      new THREE.MeshStandardMaterial({color:0x00ccff, emissive:new THREE.Color(0x00ccff), emissiveIntensity:3.0}));
+    led.position.set(0, ceilH - 0.01, unitD/2 + 0.005); g.add(led);
+    var pl = new THREE.PointLight(0x00aaff, 0.5, 2.5, 2.0);
+    pl.position.set(0, ceilH - 0.05, unitD/2 + 0.3); g.add(pl);
+    // Support rods
+    [[-unitW*0.35, 0], [unitW*0.35, 0]].forEach(function(rp) {
+      var rod = mkMesh(new THREE.CylinderGeometry(0.015, 0.015, 0.28, 6), matStd(0x888888, 0.4, 0.7));
+      rod.position.set(rp[0], ceilH + 0.14, rp[1]); g.add(rod);
+    });
+
+  } else if (type === 1) {
+    // Wall cassette
+    var cassW = 0.78, cassH = 0.62, cassD = 0.18;
+    var mountH = 1.8 + R2() * (H - 2.2);
+    var bodyMat = matStd(0xf2f0ed, 0.72, 0.04);
+    var body2 = mkMesh(new THREE.BoxGeometry(cassW, cassH, cassD), bodyMat);
+    body2.position.set(0, mountH, 0); g.add(body2);
+    // Display strip
+    var dpc = document.createElement('canvas'); dpc.width=128; dpc.height=32;
+    var dct = dpc.getContext('2d');
+    dct.fillStyle='#001a1a'; dct.fillRect(0,0,128,32);
+    dct.fillStyle='#00eeff'; dct.font='bold 18px monospace'; dct.textAlign='center';
+    dct.fillText((18 + Math.floor(R2()*8)) + '\u00b0C', 64, 22);
+    var displayMat = new THREE.MeshStandardMaterial({map:new THREE.CanvasTexture(dpc),
+      emissive:new THREE.Color(0x00aacc), emissiveIntensity:1.5});
+    var disp2 = mkMesh(new THREE.PlaneGeometry(0.18, 0.045), displayMat);
+    disp2.position.set(cassW*0.22, mountH + cassH*0.28, cassD/2+0.001); g.add(disp2);
+    // Louver slots
+    for (var li2=0; li2<4; li2++) {
+      var lv = mkMesh(new THREE.BoxGeometry(cassW*0.8, 0.018, 0.12), matStd(0xe8e6e2, 0.7, 0.0));
+      lv.rotation.x = 0.3; lv.position.set(0, mountH - cassH*0.15 - li2*0.08, cassD/2 - 0.05); g.add(lv);
+    }
+    // Remote control on floor
+    var remote = mkMesh(new THREE.BoxGeometry(0.06, 0.015, 0.14), matStd(0x222222, 0.8, 0.0));
+    remote.position.set(cassW/2 + 0.2, 0.007, 0.1); g.add(remote);
+
+  } else {
+    // Industrial floor unit — rooftop/mechanical room style
+    var unitW2 = 1.2 + R2()*0.6, unitH2 = 0.85 + R2()*0.45, unitD2 = 0.7 + R2()*0.3;
+    var indMat = matStd(0x3a3a3a, 0.75, 0.15);
+    var body3 = mkMesh(new THREE.BoxGeometry(unitW2, unitH2, unitD2), indMat);
+    body3.position.set(0, unitH2/2, 0); g.add(body3);
+    // Fan grille on face
+    var grilleMat = matStd(0x222222, 0.8, 0.1);
+    var grille2 = mkMesh(new THREE.BoxGeometry(unitW2*0.55, unitH2*0.65, 0.02), grilleMat);
+    grille2.position.set(-unitW2*0.1, unitH2/2, unitD2/2+0.001); g.add(grille2);
+    // Fan blades
+    var fanMat = matStd(0x555555, 0.5, 0.6);
+    for (var fi=0; fi<5; fi++) {
+      var blade = mkMesh(new THREE.BoxGeometry(unitW2*0.22, 0.025, 0.04), fanMat.clone());
+      blade.rotation.z = fi * Math.PI*2/5; blade.position.set(-unitW2*0.1, unitH2/2, unitD2/2+0.012); g.add(blade);
+    }
+    // Pipes sticking out top
+    for (var pi=0; pi<2; pi++) {
+      var pipeH = 0.3 + R2()*0.5;
+      var pipe = mkMesh(new THREE.CylinderGeometry(0.045, 0.045, pipeH, 8), matStd(0x606060,0.5,0.6));
+      pipe.position.set(-unitW2*0.25+pi*unitW2*0.5, unitH2+pipeH/2, 0); g.add(pipe);
+      var capPipe = mkMesh(new THREE.CylinderGeometry(0.07, 0.07, 0.04, 8), matStd(0x444444,0.6,0.5));
+      capPipe.position.set(-unitW2*0.25+pi*unitW2*0.5, unitH2+pipeH, 0); g.add(capPipe);
+    }
+    // Status LED
+    var ledInd = mkMesh(new THREE.SphereGeometry(0.022, 8, 6),
+      new THREE.MeshStandardMaterial({color:0x00ff44, emissive:new THREE.Color(0x00ff44), emissiveIntensity:4.0}));
+    ledInd.position.set(unitW2/2-0.08, unitH2-0.1, unitD2/2+0.001); g.add(ledInd);
+    // Control panel
+    var ctrlMat = matStd(0x2a2a2a, 0.8, 0.05);
+    var ctrl = mkMesh(new THREE.BoxGeometry(0.32, 0.22, 0.01), ctrlMat);
+    ctrl.position.set(unitW2*0.28, unitH2*0.55, unitD2/2+0.002); g.add(ctrl);
+  }
+
+  var shd = mkMesh(new THREE.CircleGeometry(0.65, 20),
+    new THREE.MeshStandardMaterial({color:0x000000,transparent:true,opacity:0.18,roughness:1,depthWrite:false}));
+  shd.rotation.x=-Math.PI/2; shd.position.y=0.003; g.add(shd);
+  return g;
+}
+
 // --- Mega room additional objects ---
 function buildMegaObelisk(R2, H) {
   var g = new THREE.Group();
@@ -1545,53 +1779,42 @@ function buildVideoTape(R2) {
 /* ----------------------------------------------------------
    Room builder helpers
 ---------------------------------------------------------- */
+var WALL_T = 0.18; // wall thickness in metres
+
 function buildWallFB(grp, W, H, DOOR_W, DOOR_H, doorX, z, facingBack, matFn) {
-  var rotY   = facingBack ? Math.PI : 0;
+  var sign = facingBack ? 1 : -1;
   var leftW  = W / 2 + doorX - DOOR_W / 2;
   var rightW = W / 2 - doorX - DOOR_W / 2;
   var topH   = H - DOOR_H;
   if (leftW > 0.01) {
-    var m = mkMesh(new THREE.PlaneGeometry(leftW, H), matFn());
-    m.rotation.y = rotY;
-    m.position.set(-W / 2 + leftW / 2, H / 2, z);
-    grp.add(m);
+    var m = mkMesh(new THREE.BoxGeometry(leftW, H, WALL_T), matFn());
+    m.position.set(-W/2 + leftW/2, H/2, z); grp.add(m);
   }
   if (rightW > 0.01) {
-    var m2 = mkMesh(new THREE.PlaneGeometry(rightW, H), matFn());
-    m2.rotation.y = rotY;
-    m2.position.set(W / 2 - rightW / 2, H / 2, z);
-    grp.add(m2);
+    var m2 = mkMesh(new THREE.BoxGeometry(rightW, H, WALL_T), matFn());
+    m2.position.set(W/2 - rightW/2, H/2, z); grp.add(m2);
   }
   if (topH > 0.01) {
-    var m3 = mkMesh(new THREE.PlaneGeometry(DOOR_W, topH), matFn());
-    m3.rotation.y = rotY;
-    m3.position.set(doorX, DOOR_H + topH / 2, z);
-    grp.add(m3);
+    var m3 = mkMesh(new THREE.BoxGeometry(DOOR_W, topH, WALL_T), matFn());
+    m3.position.set(doorX, DOOR_H + topH/2, z); grp.add(m3);
   }
 }
 
 function buildWallLR(grp, D, H, DOOR_W, DOOR_H, doorZ, x, isLeft, matFn) {
-  var rotY   = isLeft ? Math.PI / 2 : -Math.PI / 2;
   var frontD = D / 2 + doorZ - DOOR_W / 2;
   var backD  = D / 2 - doorZ - DOOR_W / 2;
   var topH   = H - DOOR_H;
   if (frontD > 0.01) {
-    var m = mkMesh(new THREE.PlaneGeometry(frontD, H), matFn());
-    m.rotation.y = rotY;
-    m.position.set(x, H / 2, -D / 2 + frontD / 2);
-    grp.add(m);
+    var m = mkMesh(new THREE.BoxGeometry(WALL_T, H, frontD), matFn());
+    m.position.set(x, H/2, -D/2 + frontD/2); grp.add(m);
   }
   if (backD > 0.01) {
-    var m2 = mkMesh(new THREE.PlaneGeometry(backD, H), matFn());
-    m2.rotation.y = rotY;
-    m2.position.set(x, H / 2, D / 2 - backD / 2);
-    grp.add(m2);
+    var m2 = mkMesh(new THREE.BoxGeometry(WALL_T, H, backD), matFn());
+    m2.position.set(x, H/2, D/2 - backD/2); grp.add(m2);
   }
   if (topH > 0.01) {
-    var m3 = mkMesh(new THREE.PlaneGeometry(DOOR_W, topH), matFn());
-    m3.rotation.y = rotY;
-    m3.position.set(x, DOOR_H + topH / 2, doorZ);
-    grp.add(m3);
+    var m3 = mkMesh(new THREE.BoxGeometry(WALL_T, topH, DOOR_W), matFn());
+    m3.position.set(x, DOOR_H + topH/2, doorZ); grp.add(m3);
   }
 }
 
@@ -1680,18 +1903,18 @@ var PALETTES = [
 function buildShapeRect(g, W, D, H, hw, hd, DW, DH, fDX, bDX, lDZ, rDZ, dB, dL, dR, wM) {
   buildWallFB(g, W, H, DW, DH, fDX, -hd, false, wM);
   if (dB) { buildWallFB(g, W, H, DW, DH, bDX, hd, true, wM); }
-  else { var m = mkMesh(new THREE.PlaneGeometry(W,H), wM()); m.rotation.y=Math.PI; m.position.set(0,H/2,hd); g.add(m); }
+  else { var m = mkMesh(new THREE.BoxGeometry(W, H, WALL_T), wM()); m.position.set(0,H/2,hd); g.add(m); }
   if (dL) { buildWallLR(g, D, H, DW, DH, lDZ, -hw, true, wM); }
-  else { var m2 = mkMesh(new THREE.PlaneGeometry(D,H), wM()); m2.rotation.y=Math.PI/2; m2.position.set(-hw,H/2,0); g.add(m2); }
+  else { var m2 = mkMesh(new THREE.BoxGeometry(WALL_T, H, D), wM()); m2.position.set(-hw,H/2,0); g.add(m2); }
   if (dR) { buildWallLR(g, D, H, DW, DH, rDZ, hw, false, wM); }
-  else { var m3 = mkMesh(new THREE.PlaneGeometry(D,H), wM()); m3.rotation.y=-Math.PI/2; m3.position.set(hw,H/2,0); g.add(m3); }
+  else { var m3 = mkMesh(new THREE.BoxGeometry(WALL_T, H, D), wM()); m3.position.set(hw,H/2,0); g.add(m3); }
 }
 
 function buildShapeHex(g, W, D, H, hw, hd, DW, DH, fDX, bDX, dB, wM) {
   // Flat-top hex: front/back walls align with z=±hd; 4 angled corner walls
   buildWallFB(g, W, H, DW, DH, fDX, -hd, false, wM);
   if (dB) { buildWallFB(g, W, H, DW, DH, bDX, hd, true, wM); }
-  else { var m = mkMesh(new THREE.PlaneGeometry(W,H), wM()); m.rotation.y=Math.PI; m.position.set(0,H/2,hd); g.add(m); }
+  else { var m = mkMesh(new THREE.BoxGeometry(W, H, WALL_T), wM()); m.position.set(0,H/2,hd); g.add(m); }
   // 4 diagonal panels connecting front-back
   var corners = [
     [-hw,-hd*0.5, 0,-hd], [0,-hd, hw,-hd*0.5],
@@ -1699,7 +1922,7 @@ function buildShapeHex(g, W, D, H, hw, hd, DW, DH, fDX, bDX, dB, wM) {
   ];
   corners.forEach(function(c) {
     var len = Math.sqrt((c[2]-c[0])*(c[2]-c[0])+(c[3]-c[1])*(c[3]-c[1]));
-    var p = mkMesh(new THREE.PlaneGeometry(len,H), wM());
+    var p = mkMesh(new THREE.BoxGeometry(len, H, WALL_T), wM());
     p.position.set((c[0]+c[2])/2, H/2, (c[1]+c[3])/2);
     p.rotation.y = Math.atan2(c[2]-c[0], c[3]-c[1]);
     g.add(p);
@@ -1719,7 +1942,7 @@ function buildShapeCylinder(g, R, H, DW, dB, wM) {
     });
     if (skip) continue;
     var pW = (2*Math.PI*R/N) * 1.08;
-    var p = mkMesh(new THREE.PlaneGeometry(pW, H), wM());
+    var p = mkMesh(new THREE.BoxGeometry(pW, H, WALL_T), wM());
     p.position.set(Math.sin(a)*R, H/2, Math.cos(a)*R);
     p.rotation.y = a + Math.PI;
     g.add(p);
@@ -1739,7 +1962,7 @@ function buildShapeDome(g, R, H, DW, DH, wM) {
     var diff = Math.abs(((a - Math.PI) % (Math.PI*2) + Math.PI*3) % (Math.PI*2) - Math.PI);
     if (diff < ringDAngle / 2) continue;
     var pW = (2*Math.PI*R/ringN) * 1.06;
-    var m = mkMesh(new THREE.PlaneGeometry(pW, DH + 0.3), wM());
+    var m = mkMesh(new THREE.BoxGeometry(pW, DH + 0.3, WALL_T), wM());
     m.position.set(Math.sin(a)*R, (DH + 0.3)/2, Math.cos(a)*R);
     m.rotation.y = a + Math.PI;
     g.add(m);
@@ -1754,19 +1977,11 @@ function buildShapeLShape(g, W, D, H, hw, hd, DW, DH, fDX, bDX, lDZ, rDZ, dB, dL
   var corner = sides[Math.floor(R2() * 4)];
   var ox = corner[0] * (hw - bx), oz = corner[1] * (hd - bz);
   // Horizontal inner wall
-  var m1 = mkMesh(new THREE.PlaneGeometry(bx*2, H), wM());
-  m1.rotation.y = corner[1] > 0 ? 0 : Math.PI;
+  var m1 = mkMesh(new THREE.BoxGeometry(bx*2, H, WALL_T), wM());
   m1.position.set(corner[0]*(hw-bx), H/2, corner[1]*(hd-bz)); g.add(m1);
-  var m1b = mkMesh(new THREE.PlaneGeometry(bx*2, H), wM());
-  m1b.rotation.y = corner[1] > 0 ? Math.PI : 0;
-  m1b.position.set(corner[0]*(hw-bx), H/2, corner[1]*(hd-bz)); g.add(m1b);
   // Vertical inner wall
-  var m2 = mkMesh(new THREE.PlaneGeometry(bz*2, H), wM());
-  m2.rotation.y = corner[0] > 0 ? -Math.PI/2 : Math.PI/2;
+  var m2 = mkMesh(new THREE.BoxGeometry(WALL_T, H, bz*2), wM());
   m2.position.set(corner[0]*(hw-bx*2), H/2, corner[1]*(hd-bz)); g.add(m2);
-  var m2b = mkMesh(new THREE.PlaneGeometry(bz*2, H), wM());
-  m2b.rotation.y = corner[0] > 0 ? Math.PI/2 : -Math.PI/2;
-  m2b.position.set(corner[0]*(hw-bx*2), H/2, corner[1]*(hd-bz)); g.add(m2b);
 }
 
 function buildShapeCross(g, W, D, H, hw, hd, DW, DH, fDX, bDX, lDZ, rDZ, dB, dL, dR, wM, R2) {
@@ -1775,19 +1990,11 @@ function buildShapeCross(g, W, D, H, hw, hd, DW, DH, fDX, bDX, lDZ, rDZ, dB, dL,
   var cx = hw * (0.30 + R2() * 0.18), cz = hd * (0.30 + R2() * 0.18);
   [[-1,-1],[-1,1],[1,-1],[1,1]].forEach(function(s) {
     // Horizontal wall
-    var wh1 = mkMesh(new THREE.PlaneGeometry(cx*2, H), wM());
-    wh1.rotation.y = s[1]>0 ? 0 : Math.PI;
+    var wh1 = mkMesh(new THREE.BoxGeometry(cx*2, H, WALL_T), wM());
     wh1.position.set(s[0]*(hw-cx), H/2, s[1]*(hd-cz)); g.add(wh1);
-    var wh2 = mkMesh(new THREE.PlaneGeometry(cx*2, H), wM());
-    wh2.rotation.y = s[1]>0 ? Math.PI : 0;
-    wh2.position.set(s[0]*(hw-cx), H/2, s[1]*(hd-cz)); g.add(wh2);
     // Vertical wall
-    var wv1 = mkMesh(new THREE.PlaneGeometry(cz*2, H), wM());
-    wv1.rotation.y = s[0]>0 ? -Math.PI/2 : Math.PI/2;
+    var wv1 = mkMesh(new THREE.BoxGeometry(WALL_T, H, cz*2), wM());
     wv1.position.set(s[0]*(hw-cx*2), H/2, s[1]*(hd-cz)); g.add(wv1);
-    var wv2 = mkMesh(new THREE.PlaneGeometry(cz*2, H), wM());
-    wv2.rotation.y = s[0]>0 ? Math.PI/2 : -Math.PI/2;
-    wv2.position.set(s[0]*(hw-cx*2), H/2, s[1]*(hd-cz)); g.add(wv2);
   });
 }
 
@@ -1844,7 +2051,7 @@ function buildShapeCave(g, W, D, H, hw, hd, DW, DH, fDX, wM, R2) {
       if (sLen < 0.3) { cursor+=sLen; continue; }
       var pH = H*(0.5+R2()*0.55);
       var jit = (R2()-0.5)*0.55, tilt = (R2()-0.5)*0.28;
-      var m = mkMesh(new THREE.PlaneGeometry(sLen, pH), wM());
+      var m = mkMesh(new THREE.BoxGeometry(sLen, pH, WALL_T*0.8), wM());
       m.rotation.y = w.dir + tilt;
       if (w.isZ) m.position.set(cursor+sLen/2+jit, pH/2, w.pos);
       else       m.position.set(w.pos, pH/2, cursor+sLen/2+jit);
@@ -1889,9 +2096,9 @@ function buildShapeBrutalist(g, W, D, H, hw, hd, DW, DH, fDX, bDX, lDZ, rDZ, dB,
 function buildShapeNarrow(g, W, D, H, hw, hd, DW, DH, fDX, bDX, dB, wM, R2) {
   buildWallFB(g, W, H, DW, DH, fDX, -hd, false, wM);
   if (dB) { buildWallFB(g, W, H, DW, DH, bDX, hd, true, wM); }
-  else { var m = mkMesh(new THREE.PlaneGeometry(W,H), wM()); m.rotation.y=Math.PI; m.position.set(0,H/2,hd); g.add(m); }
-  var ml = mkMesh(new THREE.PlaneGeometry(D,H), wM()); ml.rotation.y=Math.PI/2; ml.position.set(-hw,H/2,0); g.add(ml);
-  var mr = mkMesh(new THREE.PlaneGeometry(D,H), wM()); mr.rotation.y=-Math.PI/2; mr.position.set(hw,H/2,0); g.add(mr);
+  else { var m = mkMesh(new THREE.BoxGeometry(W, H, WALL_T), wM()); m.position.set(0,H/2,hd); g.add(m); }
+  var ml = mkMesh(new THREE.BoxGeometry(WALL_T, H, D), wM()); ml.position.set(-hw,H/2,0); g.add(ml);
+  var mr = mkMesh(new THREE.BoxGeometry(WALL_T, H, D), wM()); mr.position.set(hw,H/2,0); g.add(mr);
   // Arch dividers along the length
   var nA = Math.max(2, Math.floor(D/4.5));
   var aW = W*0.58 + R2()*W*0.2;
@@ -1915,9 +2122,9 @@ function buildShapeOctagon(g, W, D, H, hw, hd, DW, DH, fDX, bDX, dB, wM, R2) {
   // 8-sided room: 4 flat walls (cardinal) + 4 corner cuts
   buildWallFB(g, W, H, DW, DH, fDX, -hd, false, wM);
   if (dB) { buildWallFB(g, W, H, DW, DH, bDX, hd, true, wM); }
-  else { var m = mkMesh(new THREE.PlaneGeometry(W,H), wM()); m.rotation.y=Math.PI; m.position.set(0,H/2,hd); g.add(m); }
-  var ml = mkMesh(new THREE.PlaneGeometry(D*0.6,H), wM()); ml.rotation.y=Math.PI/2; ml.position.set(-hw,H/2,0); g.add(ml);
-  var mr = mkMesh(new THREE.PlaneGeometry(D*0.6,H), wM()); mr.rotation.y=-Math.PI/2; mr.position.set(hw,H/2,0); g.add(mr);
+  else { var m = mkMesh(new THREE.BoxGeometry(W, H, WALL_T), wM()); m.position.set(0,H/2,hd); g.add(m); }
+  var ml = mkMesh(new THREE.BoxGeometry(WALL_T, H, D*0.6), wM()); ml.position.set(-hw,H/2,0); g.add(ml);
+  var mr = mkMesh(new THREE.BoxGeometry(WALL_T, H, D*0.6), wM()); mr.position.set(hw,H/2,0); g.add(mr);
   // 4 corner diagonal panels
   var cx = hw*0.65, cz = hd*0.65;
   var diags = [
@@ -1926,7 +2133,7 @@ function buildShapeOctagon(g, W, D, H, hw, hd, DW, DH, fDX, bDX, dB, wM, R2) {
   ];
   diags.forEach(function(c) {
     var len = Math.sqrt((c[2]-c[0])*(c[2]-c[0])+(c[3]-c[1])*(c[3]-c[1]));
-    var p = mkMesh(new THREE.PlaneGeometry(len,H), wM());
+    var p = mkMesh(new THREE.BoxGeometry(len, H, WALL_T), wM());
     p.position.set((c[0]+c[2])/2, H/2, (c[1]+c[3])/2);
     p.rotation.y = Math.atan2(c[2]-c[0], c[3]-c[1]);
     g.add(p);
@@ -2139,7 +2346,7 @@ function buildRoom(seed) {
       else if (mType===3) exGrp=buildMegaObelisk(R2,H);
       else                exGrp=buildMegaTorus(R2,H);
     } else {
-      var eType=Math.floor(R2()*27);
+      var eType=Math.floor(R2()*30);
       if      (eType===0)  exGrp=buildMonolith(R2,H);
       else if (eType===1)  exGrp=buildSphere(R2);
       else if (eType===2)  exGrp=buildSculpture(R2);
@@ -2166,7 +2373,10 @@ function buildRoom(seed) {
       else if (eType===23) exGrp=buildPipeCluster(R2,H);
       else if (eType===24) exGrp=buildVHSUnit(R2);
       else if (eType===25) exGrp=buildCRTTV(R2);
-      else                 exGrp=buildVideoTape(R2);
+      else if (eType===26) exGrp=buildVideoTape(R2);
+      else if (eType===27) exGrp=buildUnicorn(R2);
+      else if (eType===28) exGrp=buildOilTimer(R2);
+      else                 exGrp=buildHVAC(R2,H);
     }
     var mW=isMega?20:4, mD2=isMega?20:6;
     exGrp.position.set(
@@ -2202,6 +2412,12 @@ var yaw       = 0;
 var pitch     = 0;
 var walkPhase = 0;
 var SPEED     = 0.052;
+var SPEED_WALK = 0.052;
+var SPEED_RUN  = 0.155;
+var moveHoldTime = 0;   // seconds held down
+var RUN_THRESHOLD = 1.8; // seconds until running kicks in
+var currentSpeed = SPEED_WALK;
+var speedIndicatorEl = document.getElementById('speed-indicator');
 
 /* ----------------------------------------------------------
    Room & transition state
@@ -2347,6 +2563,19 @@ if (isMobile) {
   pcHint.style.display    = 'none';
 }
 
+/* NEXT ROOM button */
+document.getElementById('next-room-btn').addEventListener('click', function () {
+  if (transitioning) return;
+  var fakeSeed = Math.floor(Math.random() * 99991) + 1;
+  enterDoor({ seed: fakeSeed });
+});
+document.getElementById('next-room-btn').addEventListener('touchend', function (e) {
+  e.preventDefault();
+  if (transitioning) return;
+  var fakeSeed = Math.floor(Math.random() * 99991) + 1;
+  enterDoor({ seed: fakeSeed });
+}, { passive: false });
+
 /* ----------------------------------------------------------
    PC: Pointer Lock + WASD
 ---------------------------------------------------------- */
@@ -2473,11 +2702,20 @@ function animate() {
 
   var moving = (fwd !== 0 || str !== 0);
   if (moving) {
-    camera.position.x += (-Math.sin(yaw) * fwd + Math.cos(yaw) * str) * SPEED;
-    camera.position.z += (-Math.cos(yaw) * fwd - Math.sin(yaw) * str) * SPEED;
-    walkPhase += dt * 7.8;
-    camera.position.y = 1.72 + Math.sin(walkPhase) * 0.04;
+    moveHoldTime += dt;
+    var runRatio = Math.max(0, Math.min(1, (moveHoldTime - RUN_THRESHOLD) / 1.2));
+    currentSpeed = SPEED_WALK + (SPEED_RUN - SPEED_WALK) * runRatio;
+    if (runRatio > 0.05) { speedIndicatorEl.classList.add('running'); }
+    camera.position.x += (-Math.sin(yaw) * fwd + Math.cos(yaw) * str) * currentSpeed;
+    camera.position.z += (-Math.cos(yaw) * fwd - Math.sin(yaw) * str) * currentSpeed;
+    var bobSpeed = 7.8 + runRatio * 6.0;
+    var bobAmp   = 0.04 + runRatio * 0.055;
+    walkPhase += dt * bobSpeed;
+    camera.position.y = 1.72 + Math.sin(walkPhase) * bobAmp;
   } else {
+    moveHoldTime = 0;
+    currentSpeed = SPEED_WALK;
+    speedIndicatorEl.classList.remove('running');
     walkPhase += dt * 1.8;
     camera.position.y += (1.72 + Math.sin(walkPhase) * 0.006 - camera.position.y) * 0.07;
   }
