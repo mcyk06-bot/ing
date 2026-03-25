@@ -794,17 +794,321 @@ function buildBench(R2) {
   return g;
 }
 
+/* ----------------------------------------------------------
+   Basin stone texture (for water feature)
+---------------------------------------------------------- */
+function makeBasinTex(hexColor) {
+  var S = 512;
+  var cv = document.createElement('canvas');
+  cv.width = cv.height = S;
+  var cx = cv.getContext('2d');
+  var r = (hexColor >> 16) & 0xff;
+  var gv = (hexColor >> 8) & 0xff;
+  var b = hexColor & 0xff;
+  cx.fillStyle = 'rgb(' + r + ',' + gv + ',' + b + ')';
+  cx.fillRect(0, 0, S, S);
+  // Stone grain noise
+  for (var i = 0; i < 40000; i++) {
+    var dv = (Math.random() - 0.5) * 30;
+    cx.fillStyle = 'rgba(' +
+      Math.floor(Math.min(255, Math.max(0, r + dv))) + ',' +
+      Math.floor(Math.min(255, Math.max(0, gv + dv))) + ',' +
+      Math.floor(Math.min(255, Math.max(0, b + dv))) + ',0.045)';
+    cx.fillRect(Math.random() * S, Math.random() * S, Math.random() * 2.5 + 0.4, Math.random() * 2.5 + 0.4);
+  }
+  // Tile grout lines
+  var groutA = 0.15 + Math.random() * 0.1;
+  cx.strokeStyle = 'rgba(' + Math.floor(r * 0.58) + ',' + Math.floor(gv * 0.58) + ',' + Math.floor(b * 0.58) + ',' + groutA + ')';
+  cx.lineWidth = 1.8;
+  for (var k = 0; k <= S; k += 64) {
+    cx.beginPath(); cx.moveTo(k, 0); cx.lineTo(k, S); cx.stroke();
+    cx.beginPath(); cx.moveTo(0, k); cx.lineTo(S, k); cx.stroke();
+  }
+  // Crack veins
+  for (var j = 0; j < 6; j++) {
+    var lx = Math.random() * S, ly = Math.random() * S;
+    cx.strokeStyle = 'rgba(' + Math.floor(r * 0.55) + ',' + Math.floor(gv * 0.55) + ',' + Math.floor(b * 0.55) + ',0.2)';
+    cx.lineWidth = 0.6 + Math.random() * 1.0;
+    cx.beginPath();
+    cx.moveTo(lx, ly);
+    cx.lineTo(lx + (Math.random() - 0.5) * 160, ly + (Math.random() - 0.5) * 90);
+    cx.stroke();
+  }
+  // Wet stain ring (algae/mineral deposit at waterline)
+  var grad = cx.createRadialGradient(S/2, S/2, S*0.15, S/2, S/2, S*0.48);
+  grad.addColorStop(0, 'rgba(0,0,0,0)');
+  grad.addColorStop(1, 'rgba(' + Math.floor(r*0.7) + ',' + Math.floor(gv*0.8) + ',' + Math.floor(b*0.75) + ',0.22)');
+  cx.fillStyle = grad;
+  cx.fillRect(0, 0, S, S);
+  var t = new THREE.CanvasTexture(cv);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  return t;
+}
+
+/* ----------------------------------------------------------
+   Water feature — enhanced (pool / fountain / puddles)
+---------------------------------------------------------- */
 function buildWaterFeature(R2) {
   var g = new THREE.Group();
-  var w = 2.0 + R2() * 3.0;
-  var d = 2.0 + R2() * 3.0;
-  var base = mkMesh(new THREE.BoxGeometry(w, 0.2, d), matStd(0x333333, 0.8, 0.2));
-  base.position.y = 0.1;
-  g.add(base);
-  var waterMat = new THREE.MeshStandardMaterial({ color: 0x88ccff, transparent: true, opacity: 0.7, roughness: 0.1, metalness: 0.8 });
-  var water = new THREE.Mesh(new THREE.BoxGeometry(w - 0.1, 0.21, d - 0.1), waterMat);
-  water.position.y = 0.1;
-  g.add(water);
+  var waterType = Math.floor(R2() * 3); // 0=pool, 1=fountain, 2=puddles
+
+  /* ---- shared water colours ---- */
+  var waterPalettes = [
+    { col: 0x0d3a5c, emit: 0x0a2840, lightCol: 0x4488cc }, // deep midnight blue
+    { col: 0x0e4a3a, emit: 0x083020, lightCol: 0x44aaaa }, // dark teal
+    { col: 0x1a1a3a, emit: 0x0a0a28, lightCol: 0x6666cc }, // near-black indigo
+    { col: 0x2a4a1a, emit: 0x182810, lightCol: 0x66aa44 }, // swamp green
+    { col: 0x3a2a10, emit: 0x201808, lightCol: 0xaa8844 }, // brackish brown
+    { col: 0x1a3a3a, emit: 0x102020, lightCol: 0x44aaaa }, // dark cyan
+  ];
+  var wp = waterPalettes[Math.floor(R2() * waterPalettes.length)];
+
+  /* ---- basin styles ---- */
+  var basinStyles = [
+    { hex: 0x6a6258, rough: 0.91 }, // concrete
+    { hex: 0x4a4038, rough: 0.88 }, // dark wet stone
+    { hex: 0x8a7c68, rough: 0.85 }, // limestone
+    { hex: 0x303028, rough: 0.95 }, // granite
+    { hex: 0x786050, rough: 0.82 }, // brick/terracotta
+  ];
+  var bs = basinStyles[Math.floor(R2() * basinStyles.length)];
+
+  /* ==================================================
+     TYPE 2 — Puddle cluster (flat, no basin walls)
+  ================================================== */
+  if (waterType === 2) {
+    var pCount = 3 + Math.floor(R2() * 4);
+    var rippleS2 = 128;
+    var rippleCv2 = document.createElement('canvas');
+    rippleCv2.width = rippleCv2.height = rippleS2;
+    var rippleCx2 = rippleCv2.getContext('2d');
+    var rippleTex2 = new THREE.CanvasTexture(rippleCv2);
+    rippleTex2.wrapS = rippleTex2.wrapT = THREE.RepeatWrapping;
+
+    var puddleMat = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(wp.col),
+      transparent: true, opacity: 0.65,
+      roughness: 0.04, metalness: 0.92,
+      roughnessMap: rippleTex2,
+    });
+
+    for (var pi = 0; pi < pCount; pi++) {
+      var pr = 0.22 + R2() * 0.7;
+      var pxOff = (R2() - 0.5) * 3.0;
+      var pzOff = (R2() - 0.5) * 3.0;
+      var pGeo = new THREE.CircleGeometry(pr, 10 + Math.floor(R2() * 8));
+      var pud = mkMesh(pGeo, puddleMat.clone());
+      pud.rotation.x = -Math.PI / 2;
+      pud.position.set(pxOff, 0.004, pzOff);
+      g.add(pud);
+    }
+
+    // Dim caustic light
+    var pdLight = new THREE.PointLight(wp.lightCol, 0.3, 3.5, 2.5);
+    pdLight.position.set(0, 0.35, 0);
+    g.add(pdLight);
+
+    var sources2 = [];
+    for (var si2 = 0; si2 < 4; si2++) {
+      sources2.push({ x: Math.random() * rippleS2, y: Math.random() * rippleS2,
+        radius: Math.random() * rippleS2, speed: 12 + Math.random() * 18 });
+    }
+    activeWaterSurfaces.push({
+      rippleCv: rippleCv2, rippleCx: rippleCx2, rippleTex: rippleTex2,
+      causticLight: pdLight, spouts: [], phase: R2() * Math.PI * 2,
+      sources: sources2
+    });
+    return g;
+  }
+
+  /* ==================================================
+     TYPES 0 & 1 — Pool or Fountain (with basin)
+  ================================================== */
+  var w  = 1.6 + R2() * 3.4;
+  var d  = 1.6 + R2() * 3.4;
+  var wallH = 0.14 + R2() * 0.18;
+  var wallT = 0.11;
+  var rimOvhg = 0.055;
+  var rimH    = 0.055;
+
+  // -- Basin texture --
+  var basinTex = makeBasinTex(bs.hex);
+  basinTex.repeat.set(4, 4);
+  var basinMat = new THREE.MeshStandardMaterial({
+    map: basinTex, roughness: bs.rough, metalness: 0.02
+  });
+
+  // -- Basin floor --
+  var bFloor = mkMesh(new THREE.BoxGeometry(w, wallT, d), basinMat.clone());
+  bFloor.position.y = wallT / 2;
+  g.add(bFloor);
+
+  // -- Basin walls (4 sides) --
+  var wDefs = [
+    [w + wallT*2, wallH, wallT,  0,             wallH/2 + wallT,  d/2 + wallT/2],
+    [w + wallT*2, wallH, wallT,  0,             wallH/2 + wallT, -d/2 - wallT/2],
+    [wallT,       wallH, d,     -w/2 - wallT/2, wallH/2 + wallT,  0            ],
+    [wallT,       wallH, d,      w/2 + wallT/2, wallH/2 + wallT,  0            ],
+  ];
+  wDefs.forEach(function(wd) {
+    var m = mkMesh(new THREE.BoxGeometry(wd[0], wd[1], wd[2]), basinMat.clone());
+    m.position.set(wd[3], wd[4], wd[5]);
+    g.add(m);
+  });
+
+  // -- Rim (overhang cap) --
+  var rimBrightHex = bs.hex + 0x101008; // slightly lighter
+  var rimTex = makeBasinTex(Math.min(0xffffff, rimBrightHex));
+  rimTex.repeat.set(3, 3);
+  var rimMat = new THREE.MeshStandardMaterial({
+    map: rimTex, roughness: Math.max(0.55, bs.rough - 0.18), metalness: 0.05
+  });
+  var rimY = wallT + wallH + rimH / 2;
+  var rimDefs = [
+    [w + (wallT+rimOvhg)*2, rimH, wallT+rimOvhg*2,  0,             rimY,  d/2 + wallT/2],
+    [w + (wallT+rimOvhg)*2, rimH, wallT+rimOvhg*2,  0,             rimY, -d/2 - wallT/2],
+    [wallT+rimOvhg*2, rimH, d + (wallT+rimOvhg)*2, -w/2-wallT/2,  rimY,  0             ],
+    [wallT+rimOvhg*2, rimH, d + (wallT+rimOvhg)*2,  w/2+wallT/2,  rimY,  0             ],
+  ];
+  rimDefs.forEach(function(rd) {
+    var m = mkMesh(new THREE.BoxGeometry(rd[0], rd[1], rd[2]), rimMat.clone());
+    m.position.set(rd[3], rd[4], rd[5]);
+    g.add(m);
+  });
+
+  // -- Ripple canvas (animated roughnessMap) --
+  var rippleS = 256;
+  var rippleCv = document.createElement('canvas');
+  rippleCv.width = rippleCv.height = rippleS;
+  var rippleCx = rippleCv.getContext('2d');
+  var rippleTex = new THREE.CanvasTexture(rippleCv);
+  rippleTex.wrapS = rippleTex.wrapT = THREE.RepeatWrapping;
+  rippleTex.repeat.set(Math.max(1, w * 0.55), Math.max(1, d * 0.55));
+
+  // -- Water surface --
+  var waterY = wallT + wallH;
+  var waterMat = new THREE.MeshStandardMaterial({
+    color:        new THREE.Color(wp.col),
+    emissive:     new THREE.Color(wp.emit),
+    emissiveIntensity: 0.35,
+    transparent:  true,
+    opacity:      0.80,
+    roughness:    0.04,
+    metalness:    0.90,
+    roughnessMap: rippleTex,
+  });
+  var waterMesh = mkMesh(
+    new THREE.PlaneGeometry(w - wallT * 0.2, d - wallT * 0.2, 1, 1),
+    waterMat
+  );
+  waterMesh.rotation.x = -Math.PI / 2;
+  waterMesh.position.y = waterY;
+  g.add(waterMesh);
+
+  // -- Caustic / underwater light --
+  var causticLight = new THREE.PointLight(wp.lightCol, 0.55, w * 2.8 + 2, 2.2);
+  causticLight.position.set(0, waterY + 0.15, 0);
+  g.add(causticLight);
+
+  // -- Water-line wet stain (semi-transparent dark strip on inside wall top) --
+  var stainMat = new THREE.MeshStandardMaterial({
+    color: 0x050505, transparent: true, opacity: 0.28,
+    roughness: 0.6, metalness: 0.0, depthWrite: false
+  });
+  var stainH = 0.04;
+  var stainDefs = [
+    [w, stainH, 0.01,  0,             waterY - stainH/2,  d/2 - 0.01],
+    [w, stainH, 0.01,  0,             waterY - stainH/2, -d/2 + 0.01],
+    [0.01, stainH, d, -w/2 + 0.01,   waterY - stainH/2,  0          ],
+    [0.01, stainH, d,  w/2 - 0.01,   waterY - stainH/2,  0          ],
+  ];
+  stainDefs.forEach(function(sd) {
+    var m = mkMesh(new THREE.BoxGeometry(sd[0], sd[1], sd[2]), stainMat.clone());
+    m.position.set(sd[3], sd[4], sd[5]);
+    g.add(m);
+  });
+
+  // ---- Ripple sources (multiple independent origins) ----
+  var srcCount = 3 + Math.floor(R2() * 4);
+  var sources = [];
+  for (var si = 0; si < srcCount; si++) {
+    sources.push({
+      x: Math.random() * rippleS,
+      y: Math.random() * rippleS,
+      radius: Math.random() * rippleS,
+      speed: 14 + Math.random() * 22,
+    });
+  }
+
+  // ---- FOUNTAIN (type 1) ----
+  var spouts = [];
+  if (waterType === 1) {
+    var colR = 0.055 + R2() * 0.085;
+    var colH = 0.18 + R2() * 0.55;
+    var colMat = basinMat.clone();
+    var col = mkMesh(new THREE.CylinderGeometry(colR, colR * 1.35, colH, 14), colMat);
+    col.position.y = waterY + colH / 2;
+    g.add(col);
+
+    // Small basin top on column
+    var topBasin = mkMesh(new THREE.CylinderGeometry(colR * 2.8, colR * 2.2, 0.04, 14), rimMat.clone());
+    topBasin.position.y = waterY + colH;
+    g.add(topBasin);
+
+    // Water spout streams
+    var spoutN = 4 + Math.floor(R2() * 4);
+    var spoutColor = new THREE.Color(wp.col).lerp(new THREE.Color(0xaaddff), 0.55);
+    for (var fsi = 0; fsi < spoutN; fsi++) {
+      var angle = (fsi / spoutN) * Math.PI * 2;
+      var spoutH = 0.28 + R2() * 0.45;
+      var spoutMat = new THREE.MeshStandardMaterial({
+        color: spoutColor,
+        emissive: spoutColor, emissiveIntensity: 0.25,
+        transparent: true, opacity: 0.48,
+        roughness: 0.04, metalness: 0.0,
+      });
+      var spoutMesh = mkMesh(
+        new THREE.CylinderGeometry(0.007, 0.012, spoutH, 5),
+        spoutMat
+      );
+      var tiltX = -Math.cos(angle) * 0.32;
+      var tiltZ =  Math.sin(angle) * 0.32;
+      spoutMesh.rotation.x = tiltX;
+      spoutMesh.rotation.z = tiltZ;
+      spoutMesh.position.set(
+        Math.sin(angle) * (colR * 2.2),
+        waterY + colH + spoutH * 0.45,
+        Math.cos(angle) * (colR * 2.2)
+      );
+      g.add(spoutMesh);
+      spouts.push({ mesh: spoutMesh });
+    }
+
+    // Glow above fountain
+    var fLight = new THREE.PointLight(wp.lightCol, 1.1, 3.2, 2.2);
+    fLight.position.set(0, waterY + colH + 0.7, 0);
+    g.add(fLight);
+  }
+
+  // -- Shadow under basin --
+  var shd = mkMesh(
+    new THREE.CircleGeometry(Math.max(w, d) * 0.72, 24),
+    new THREE.MeshStandardMaterial({
+      color: 0x000000, transparent: true,
+      opacity: 0.16, roughness: 1, depthWrite: false
+    })
+  );
+  shd.rotation.x = -Math.PI / 2;
+  shd.position.y = 0.003;
+  g.add(shd);
+
+  // -- Register for animation --
+  activeWaterSurfaces.push({
+    rippleCv: rippleCv, rippleCx: rippleCx, rippleTex: rippleTex,
+    causticLight: causticLight, spouts: spouts,
+    phase: R2() * Math.PI * 2, sources: sources
+  });
+
   return g;
 }
 
@@ -1670,6 +1974,7 @@ function buildCreature(R2) {
 // ============================================================
 var roomInteractables = [];  // { type, worldPos, data, mesh, alive }
 var activeBeams = [];        // { mesh, dir, speed, age }
+var activeWaterSurfaces = []; // { rippleCv, rippleCx, rippleTex, causticLight, spouts, phase, sources }
 
 var memoPopupEl   = document.getElementById('memo-popup');
 var memoLabelEl   = document.getElementById('memo-label');
@@ -1679,6 +1984,7 @@ var crosshairEl   = document.getElementById('crosshair-hit');
 function clearInteractables() {
   roomInteractables = [];
   activeBeams = [];
+  activeWaterSurfaces = [];
   memoPopupEl.classList.remove('visible');
   memoLabelEl.classList.remove('visible');
   shootBtnEl.classList.remove('visible');
@@ -3208,6 +3514,75 @@ if (isMobile) {
 }
 
 /* ----------------------------------------------------------
+   Water surface animation
+---------------------------------------------------------- */
+function updateWaterSurfaces(dt) {
+  for (var i = 0; i < activeWaterSurfaces.length; i++) {
+    var ws = activeWaterSurfaces[i];
+    ws.phase += dt * 1.05;
+    var cv = ws.rippleCv, cx = ws.rippleCx, S = cv.width;
+
+    // Mid-gray base = neutral roughness (0.5 in map = material roughness value)
+    cx.fillStyle = '#7a7a7a';
+    cx.fillRect(0, 0, S, S);
+
+    // Expanding ripple rings from multiple independent sources
+    for (var ri = 0; ri < ws.sources.length; ri++) {
+      var src = ws.sources[ri];
+      src.radius += dt * src.speed;
+      if (src.radius > S * 1.35) {
+        src.radius = 0;
+        src.x = Math.random() * S;
+        src.y = Math.random() * S;
+      }
+      var fade = Math.max(0, 1 - src.radius / (S * 1.35));
+      if (fade <= 0) continue;
+      // Crests = lighter gray (lower roughness = more reflective)
+      // Troughs = darker gray (higher roughness)
+      var wave = Math.sin(src.radius * 0.18) * 0.5 + 0.5; // 0..1
+      var grayVal = Math.floor(85 + wave * 100);
+      cx.strokeStyle = 'rgba(' + grayVal + ',' + grayVal + ',' + grayVal + ',' + (fade * 0.70) + ')';
+      cx.lineWidth = 1.0 + fade * 1.8;
+      cx.beginPath();
+      cx.arc(src.x, src.y, src.radius, 0, Math.PI * 2);
+      cx.stroke();
+    }
+
+    // Glinting highlights (tiny bright specks that move with phase)
+    for (var sp = 0; sp < 10; sp++) {
+      var frac1 = ((ws.phase * 0.065 + sp * 0.1731) % 1);
+      var frac2 = ((ws.phase * 0.051 + sp * 0.1337) % 1);
+      var gx = frac1 * S;
+      var gy = frac2 * S;
+      var intensity = 0.5 + Math.sin(ws.phase * 6.3 + sp * 2.1) * 0.5;
+      var sv = Math.floor(185 + intensity * 55);
+      cx.fillStyle = 'rgba(' + sv + ',' + sv + ',' + sv + ',0.5)';
+      cx.fillRect(gx, gy, 2.5, 2.5);
+    }
+
+    ws.rippleTex.needsUpdate = true;
+
+    // Caustic light: pulsing intensity + slow drift
+    if (ws.causticLight) {
+      var lPhase = ws.phase;
+      ws.causticLight.intensity = 0.45
+        + Math.sin(lPhase * 2.3) * 0.14
+        + Math.cos(lPhase * 3.9) * 0.08;
+      ws.causticLight.position.x = Math.sin(lPhase * 0.65) * 0.32;
+      ws.causticLight.position.z = Math.cos(lPhase * 0.88) * 0.32;
+    }
+
+    // Fountain spout scale + opacity flicker
+    for (var fsi = 0; fsi < ws.spouts.length; fsi++) {
+      var sp2 = ws.spouts[fsi];
+      var sp2Phase = ws.phase + fsi * 0.75;
+      sp2.mesh.scale.y = 0.82 + Math.sin(sp2Phase * 4.5) * 0.18;
+      sp2.mesh.material.opacity = 0.38 + Math.sin(sp2Phase * 3.2) * 0.16;
+    }
+  }
+}
+
+/* ----------------------------------------------------------
    Render loop
 ---------------------------------------------------------- */
 var clock = new THREE.Clock();
@@ -3258,6 +3633,7 @@ function animate() {
 
   renderer.render(scene, camera);
   updateInteractables(dt);
+  updateWaterSurfaces(dt);
 }
 
 /* loading done */
