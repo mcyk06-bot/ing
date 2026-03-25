@@ -117,6 +117,63 @@ canvas.locked{cursor:none}
   transition:color 0.5s
 }
 #speed-indicator.running{color:rgba(255,200,100,0.5)}
+
+/* memo popup */
+#memo-popup{
+  position:fixed;top:50%;left:50%;
+  transform:translate(-50%,-62%);
+  background:rgba(245,240,230,0.96);
+  color:#1a1410;
+  font-family:'Courier New',monospace;
+  font-size:12px;line-height:1.75;
+  padding:22px 28px;
+  max-width:320px;min-width:220px;
+  box-shadow:0 4px 32px rgba(0,0,0,0.55);
+  border:1px solid rgba(120,100,60,0.35);
+  pointer-events:none;
+  z-index:300;opacity:0;
+  transition:opacity 0.4s;
+  white-space:pre-wrap;
+  filter:drop-shadow(0 0 8px rgba(180,140,60,0.3))
+}
+#memo-popup.visible{opacity:1}
+#memo-label{
+  position:fixed;bottom:90px;left:50%;
+  transform:translateX(-50%);
+  color:rgba(255,240,180,0.7);font-size:9px;
+  letter-spacing:0.45em;z-index:200;
+  pointer-events:none;opacity:0;
+  font-family:'Helvetica Neue',sans-serif;
+  transition:opacity 0.3s
+}
+#memo-label.visible{opacity:1}
+
+/* shoot button */
+#shoot-btn{
+  position:fixed;bottom:160px;left:50%;
+  transform:translateX(-50%);
+  background:rgba(200,30,30,0.75);
+  border:1px solid rgba(255,80,80,0.6);
+  color:#fff;font-size:11px;
+  letter-spacing:0.5em;font-weight:bold;
+  font-family:'Helvetica Neue',sans-serif;
+  padding:12px 28px;cursor:pointer;
+  z-index:300;opacity:0;
+  transition:opacity 0.25s,transform 0.1s;
+  pointer-events:none;
+  -webkit-tap-highlight-color:transparent
+}
+#shoot-btn.visible{opacity:1;pointer-events:auto}
+#shoot-btn:active{transform:translateX(-50%) scale(0.93)}
+#crosshair-hit{
+  position:fixed;top:50%;left:50%;
+  width:28px;height:28px;
+  transform:translate(-50%,-50%);
+  border:1.5px solid rgba(255,80,80,0);
+  border-radius:50%;pointer-events:none;
+  z-index:200;transition:border-color 0.2s
+}
+#crosshair-hit.aimed{border-color:rgba(255,80,80,0.7)}
 </style>
 </head>
 <body>
@@ -133,6 +190,10 @@ canvas.locked{cursor:none}
 <div id="fade"></div>
 <button id="next-room-btn">NEXT ROOM</button>
 <div id="speed-indicator">RUN</div>
+<div id="memo-popup"></div>
+<div id="memo-label">— READ —</div>
+<button id="shoot-btn">SHOOT</button>
+<div id="crosshair-hit"></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 'use strict';
@@ -1332,6 +1393,427 @@ function buildHVAC(R2, H) {
   return g;
 }
 
+// ============================================================
+//  WALL PAINTINGS
+// ============================================================
+function buildFramedPainting(R2, palWr, palWg, palWb) {
+  var g = new THREE.Group();
+  var fw = 0.7 + R2() * 1.8;
+  var fh = 0.55 + R2() * 1.4;
+  var thick = 0.045;
+
+  // Frame material — dark wood / gilt / minimal white
+  var frameStyles = [
+    matStd(0x2a1e0e, 0.7, 0.05),  // dark wood
+    matStd(0xc8a830, 0.25, 0.65),  // gilt
+    matStd(0x111111, 0.55, 0.35),  // black metal
+    matStd(0xf0ede8, 0.80, 0.02)   // white minimal
+  ];
+  var fMat = frameStyles[Math.floor(R2() * frameStyles.length)];
+
+  // Four frame bars
+  var bars = [
+    [fw + thick*2, thick, thick,  0,        fh/2 + thick/2, 0],
+    [fw + thick*2, thick, thick,  0,       -fh/2 - thick/2, 0],
+    [thick,        fh,    thick, -fw/2 - thick/2, 0,        0],
+    [thick,        fh,    thick,  fw/2 + thick/2, 0,        0]
+  ];
+  bars.forEach(function(b) {
+    var m = mkMesh(new THREE.BoxGeometry(b[0],b[1],b[2]), fMat.clone());
+    m.position.set(b[3],b[4],b[5]); g.add(m);
+  });
+
+  // Canvas texture — painting styles
+  var cv = document.createElement('canvas');
+  var px = 512, py = Math.floor(512 * fh / fw);
+  cv.width = px; cv.height = py;
+  var cx = cv.getContext('2d');
+  var style = Math.floor(R2() * 6);
+  var bg = [Math.floor(R2()*30+220), Math.floor(R2()*30+210), Math.floor(R2()*30+200)];
+
+  if (style === 0) {
+    // Abstract colour field (Rothko-ish)
+    var c1 = [Math.floor(R2()*255), Math.floor(R2()*180), Math.floor(R2()*120)];
+    var c2 = [Math.floor(R2()*80), Math.floor(R2()*80), Math.floor(R2()*255)];
+    cx.fillStyle = 'rgb('+c1+')'; cx.fillRect(0,0,px,py);
+    cx.fillStyle = 'rgba('+c2[0]+','+c2[1]+','+c2[2]+',0.72)';
+    cx.fillRect(px*0.08, py*0.2, px*0.84, py*0.3);
+    cx.fillStyle = 'rgba('+Math.floor(R2()*255)+','+Math.floor(R2()*200)+','+Math.floor(R2()*100)+',0.55)';
+    cx.fillRect(px*0.06, py*0.55, px*0.88, py*0.28);
+  } else if (style === 1) {
+    // Landscape silhouette
+    cx.fillStyle = 'rgb('+Math.floor(R2()*40+8)+','+Math.floor(R2()*30+12)+','+Math.floor(R2()*60+30)+')';
+    cx.fillRect(0,0,px,py);
+    // Sky gradient
+    var sg = cx.createLinearGradient(0,0,0,py*0.6);
+    sg.addColorStop(0,'rgba('+Math.floor(R2()*80+20)+','+Math.floor(R2()*40+10)+','+Math.floor(R2()*120+40)+',1)');
+    sg.addColorStop(1,'rgba('+Math.floor(R2()*200+50)+','+Math.floor(R2()*100+30)+','+Math.floor(R2()*60+20)+',1)');
+    cx.fillStyle=sg; cx.fillRect(0,0,px,py*0.65);
+    // Ground
+    cx.fillStyle='rgba('+Math.floor(R2()*30)+','+Math.floor(R2()*30)+','+Math.floor(R2()*20)+',1)';
+    cx.fillRect(0,py*0.6,px,py*0.4);
+    // Moon/sun
+    cx.fillStyle='rgba(255,240,180,0.9)';
+    cx.beginPath(); cx.arc(px*(0.2+R2()*0.6), py*(0.1+R2()*0.25), px*0.04+R2()*px*0.03, 0, Math.PI*2); cx.fill();
+    // Tree silhouettes
+    for (var ti=0; ti<3+Math.floor(R2()*4); ti++) {
+      var tx=R2()*px, th=py*(0.15+R2()*0.25), tw=px*0.03;
+      cx.fillStyle='rgba(10,8,6,0.9)';
+      cx.fillRect(tx-tw/2, py*0.6-th, tw, th);
+      cx.beginPath(); cx.arc(tx, py*0.6-th, tw*2.5, 0, Math.PI*2); cx.fill();
+    }
+  } else if (style === 2) {
+    // Geometric abstract (Mondrian-ish)
+    cx.fillStyle='#f8f4ee'; cx.fillRect(0,0,px,py);
+    var cols3 = ['#c8201c','#1a3a7c','#f0c020','#111111'];
+    for (var ri=0; ri<3+Math.floor(R2()*4); ri++) {
+      cx.fillStyle=cols3[Math.floor(R2()*cols3.length)];
+      cx.fillRect(Math.floor(R2()*px*0.7), Math.floor(R2()*py*0.7), px*(0.1+R2()*0.4), py*(0.08+R2()*0.35));
+    }
+    cx.strokeStyle='#111'; cx.lineWidth=6;
+    for (var li=0; li<5+Math.floor(R2()*4); li++) {
+      cx.beginPath();
+      if (R2()>0.5) { cx.moveTo(Math.floor(R2()*px),0); cx.lineTo(Math.floor(R2()*px),py); }
+      else          { cx.moveTo(0,Math.floor(R2()*py)); cx.lineTo(px,Math.floor(R2()*py)); }
+      cx.stroke();
+    }
+  } else if (style === 3) {
+    // Portrait-like abstract face
+    cx.fillStyle='rgb('+bg+')'; cx.fillRect(0,0,px,py);
+    var fc=[Math.floor(R2()*60+180),Math.floor(R2()*40+160),Math.floor(R2()*40+140)];
+    cx.fillStyle='rgb('+fc+')';
+    cx.beginPath(); cx.ellipse(px/2,py/2,px*0.22,py*0.32,0,0,Math.PI*2); cx.fill();
+    cx.fillStyle='rgba(30,20,15,0.8)';
+    cx.beginPath(); cx.ellipse(px*0.42,py*0.42,px*0.04,py*0.055,0,0,Math.PI*2); cx.fill();
+    cx.beginPath(); cx.ellipse(px*0.58,py*0.42,px*0.04,py*0.055,0,0,Math.PI*2); cx.fill();
+    cx.strokeStyle='rgba(30,20,15,0.6)'; cx.lineWidth=8;
+    cx.beginPath(); cx.arc(px/2,py*0.56,px*0.06,0.15,Math.PI-0.15); cx.stroke();
+  } else if (style === 4) {
+    // All-over texture marks (Pollock-ish)
+    cx.fillStyle='rgb('+Math.floor(R2()*30+8)+','+Math.floor(R2()*20+4)+','+Math.floor(R2()*20+4)+')';
+    cx.fillRect(0,0,px,py);
+    for (var si=0; si<18+Math.floor(R2()*20); si++) {
+      cx.strokeStyle='rgba('+Math.floor(R2()*255)+','+Math.floor(R2()*255)+','+Math.floor(R2()*200)+','+(0.4+R2()*0.55)+')';
+      cx.lineWidth = 1+R2()*4; cx.beginPath();
+      var sx=R2()*px, sy=R2()*py;
+      cx.moveTo(sx,sy);
+      for (var k=0; k<4+Math.floor(R2()*6); k++) { cx.lineTo(sx+R2()*px*0.4-px*0.2, sy+R2()*py*0.4-py*0.2); }
+      cx.stroke();
+    }
+  } else {
+    // Minimalist — single shape on white
+    cx.fillStyle='#f6f3ee'; cx.fillRect(0,0,px,py);
+    var mc=[Math.floor(R2()*100),Math.floor(R2()*100),Math.floor(R2()*100)];
+    cx.fillStyle='rgba('+mc+',0.88)';
+    var ms = Math.floor(R2()*3);
+    if (ms===0) { cx.beginPath(); cx.arc(px/2,py/2,Math.min(px,py)*0.25,0,Math.PI*2); cx.fill(); }
+    else if (ms===1) { cx.fillRect(px*0.25,py*0.2,px*0.5,py*0.6); }
+    else { cx.beginPath(); cx.moveTo(px/2,py*0.2); cx.lineTo(px*0.8,py*0.8); cx.lineTo(px*0.2,py*0.8); cx.closePath(); cx.fill(); }
+  }
+
+  var canvas_mesh = mkMesh(new THREE.BoxGeometry(fw, fh, 0.012),
+    new THREE.MeshStandardMaterial({ map: new THREE.CanvasTexture(cv), roughness:0.88, metalness:0.0 }));
+  canvas_mesh.position.z = thick/2 + 0.006;
+  g.add(canvas_mesh);
+
+  // Spotlight above painting
+  var spl = new THREE.SpotLight(0xfff4e0, 1.6, fh * 4.5, Math.PI/7, 0.35, 1.8);
+  spl.position.set(0, fh/2 + 1.1, 0.6);
+  spl.target.position.set(0, 0, 0);
+  g.add(spl); g.add(spl.target);
+
+  return g;
+}
+
+function addWallPaintings(grp, W, D, H, hw, hd, R2, pal) {
+  var n = 1 + Math.floor(R2() * 3);
+  var hangY = H * (0.42 + R2() * 0.2);
+  var INSET = WALL_T / 2 + 0.008;
+  var wallDefs = [
+    { axis:'z', pos:-hd+INSET, rotY:0,         len:W },
+    { axis:'z', pos: hd-INSET, rotY:Math.PI,   len:W },
+    { axis:'x', pos:-hw+INSET, rotY:Math.PI/2, len:D },
+    { axis:'x', pos: hw-INSET, rotY:-Math.PI/2,len:D }
+  ];
+  // Shuffle walls
+  for (var i=wallDefs.length-1; i>0; i--) {
+    var j=Math.floor(R2()*(i+1)); var tmp=wallDefs[i]; wallDefs[i]=wallDefs[j]; wallDefs[j]=tmp;
+  }
+  for (var pi=0; pi<Math.min(n, wallDefs.length); pi++) {
+    var wd = wallDefs[pi];
+    var p = buildFramedPainting(R2, pal.wr, pal.wg, pal.wb);
+    var offset = (R2()-0.5) * wd.len * 0.45;
+    if (wd.axis==='z') p.position.set(offset, hangY, wd.pos);
+    else               p.position.set(wd.pos, hangY, offset);
+    p.rotation.y = wd.rotY;
+    grp.add(p);
+  }
+}
+
+// ============================================================
+//  MYSTERIOUS MEMO
+// ============================================================
+var MEMO_TEXTS = [
+  "day 47\n\nthe ceiling moved\nagain last night.\ni measured it.\n3cm lower than\nyesterday.\n\nI didn't tell anyone.",
+  "note to self:\n\nif the door on the\nleft is the same door\nas the one on the right\nthen where did I go\nbetween them\n\n?",
+  "9月18日\n\n今日また同じ部屋に\n戻ってきた気がする。\nでも家具の配置が\n微妙に違う。\n\n違う、よな。",
+  "THINGS THAT ARE\nSTILL HERE:\n- the smell\n- the humming\n- me\n\nTHINGS THAT LEFT:\n- everything else",
+  "she said the walls\nwere breathing.\n\nI told her walls\ndon't breathe.\n\nI can hear it now.\nshe was right.",
+  "第三の廊下について\n\n地図には存在しない。\nでも毎朝そこを歩く。\n足音が二つ聞こえる。\n私は一人だ。",
+  "light from\nnon-existent windows\n\nI have photographed it\n14 times.\n\nthe photos show\nonly darkness.\n\nstill I feel the warmth.",
+  "あの部屋には\n何もなかった。\n\nだが帰宅すると\nポケットに石が入っていた。\n\n今日で11個目。",
+  "FLOOR LOG:\n01 - normal\n02 - normal\n03 - longer than possible\n04 - see note 03\n05 - [no entry]\n06 - I don't remember 06\n07 - writing this in 06",
+  "君へ\n\n会いたかった。\nでも鍵を持っていなかった。\nだから壁をつくった。\n\n——わかるはずの人へ",
+  "the echoes arrive\nbefore the sound.\n\ni speak.\nthe echo waits.\nthe echo waits.\nthe echo says something different.",
+  "inventory:\n- 1 chair (familiar)\n- 1 window (outside: inside)\n- 1 mirror\n (shows room without me)\n- 1 door (warm to touch)\n- me (unconfirmed)",
+  "3:17am\n\n起きていた。\n天井に何か書いてある。\n読もうとすると\n電気が消える。\n\n内容は知っている気がする。"
+];
+
+function buildMemoNote(R2) {
+  var g = new THREE.Group();
+  var paperW = 0.22, paperH = 0.28, paperT = 0.006;
+  // Yellowed paper
+  var pv = Math.floor(R2() * 3);
+  var paperCol = pv===0 ? 0xf5f0e0 : (pv===1 ? 0xe8e0cc : 0xf2ece0);
+  var paper = mkMesh(new THREE.BoxGeometry(paperW, paperH, paperT),
+    matStd(paperCol, 0.88, 0.0));
+  g.add(paper);
+  // Pin / tape
+  var pin = mkMesh(new THREE.SphereGeometry(0.012, 8, 6),
+    new THREE.MeshStandardMaterial({color:0xcc2020,roughness:0.4,metalness:0.3,
+      emissive:new THREE.Color(0x880000),emissiveIntensity:0.4}));
+  pin.position.set(0, paperH/2 - 0.02, paperT/2 + 0.012); g.add(pin);
+  // Faint ruled lines
+  var lineTex = document.createElement('canvas');
+  lineTex.width=128; lineTex.height=160;
+  var ltx = lineTex.getContext('2d');
+  ltx.fillStyle='#f5f0e0'; ltx.fillRect(0,0,128,160);
+  ltx.strokeStyle='rgba(100,80,60,0.18)'; ltx.lineWidth=1;
+  for (var li=18; li<160; li+=14) { ltx.beginPath(); ltx.moveTo(8,li); ltx.lineTo(120,li); ltx.stroke(); }
+  var linesMat = new THREE.MeshStandardMaterial({map:new THREE.CanvasTexture(lineTex), roughness:0.88});
+  var face = mkMesh(new THREE.PlaneGeometry(paperW*0.9, paperH*0.9), linesMat);
+  face.position.z = paperT/2 + 0.001; g.add(face);
+  // Subtle fold crease
+  var crease = mkMesh(new THREE.BoxGeometry(paperW, 0.003, 0.001), matStd(0xd0c8b0, 0.9, 0.0));
+  crease.position.set(0, R2()*0.06-0.03, paperT/2+0.001); g.add(crease);
+  return g;
+}
+
+// ============================================================
+//  MYSTERIOUS CREATURE
+// ============================================================
+function buildCreature(R2) {
+  var g = new THREE.Group();
+  // Cloth-draped undefined form
+  var bodyH = 1.5 + R2() * 0.4;
+  var clothCol = R2() > 0.5 ? 0xe8e4dc : 0xd0ccc4;
+  var clothMat = matStd(clothCol, 0.95, 0.0);
+
+  // Inner form (unseen body)
+  var inner = mkMesh(new THREE.SphereGeometry(0.28, 10, 8),
+    matStd(0x111111, 1.0, 0.0));
+  inner.position.y = bodyH * 0.62; g.add(inner);
+
+  // Main cloth drape — irregular blob shape
+  var drape = mkMesh(new THREE.SphereGeometry(0.35, 12, 10), clothMat.clone());
+  drape.scale.set(1.0, 1.4, 0.88); drape.position.y = bodyH * 0.62; g.add(drape);
+
+  // Cloth cascading down — multiple elongated pieces
+  var nFolds = 5 + Math.floor(R2() * 4);
+  for (var fi = 0; fi < nFolds; fi++) {
+    var angle = (fi / nFolds) * Math.PI * 2 + R2() * 0.5;
+    var foldH = bodyH * (0.55 + R2() * 0.4);
+    var foldW = 0.18 + R2() * 0.14;
+    var fold = mkMesh(new THREE.BoxGeometry(foldW, foldH, foldW * 0.5),
+      clothMat.clone());
+    var fr = 0.12 + R2() * 0.1;
+    fold.position.set(Math.cos(angle)*fr, foldH/2, Math.sin(angle)*fr);
+    fold.rotation.y = angle + R2() * 0.4;
+    fold.rotation.z = (R2()-0.5)*0.18;
+    g.add(fold);
+  }
+
+  // Pointed top
+  var top = mkMesh(new THREE.CylinderGeometry(0.02, 0.25, bodyH*0.25, 10), clothMat.clone());
+  top.position.y = bodyH * 0.78 + bodyH * 0.12; g.add(top);
+
+  // Two glowing eyes deep inside cloth
+  var eyeGeo = new THREE.SphereGeometry(0.028, 8, 6);
+  var eyeColOptions = [0xff4444, 0xffcc00, 0x44ffcc, 0xff44ff, 0xffffff];
+  var eyeCol = eyeColOptions[Math.floor(R2() * eyeColOptions.length)];
+  var eyeMat = new THREE.MeshStandardMaterial({
+    color: eyeCol, emissive: new THREE.Color(eyeCol),
+    emissiveIntensity: 6.0
+  });
+  var eyeL = new THREE.Mesh(eyeGeo, eyeMat);
+  var eyeR = new THREE.Mesh(eyeGeo, eyeMat.clone());
+  eyeL.position.set(-0.08, bodyH * 0.68, 0.22); g.add(eyeL);
+  eyeR.position.set( 0.08, bodyH * 0.68, 0.22); g.add(eyeR);
+  var eyePl = new THREE.PointLight(eyeCol, 1.2, 2.5, 2.0);
+  eyePl.position.set(0, bodyH * 0.68, 0.3); g.add(eyePl);
+
+  // Store metadata for animation + hit detection
+  g.userData.isCreature = true;
+  g.userData.bodyH = bodyH;
+  g.userData.eyePl = eyePl;
+  g.userData.baseY = 0;
+  g.userData.phase = R2() * Math.PI * 2;
+
+  var shd = mkMesh(new THREE.CircleGeometry(0.42, 16),
+    new THREE.MeshStandardMaterial({color:0x000000,transparent:true,opacity:0.22,roughness:1,depthWrite:false}));
+  shd.rotation.x = -Math.PI/2; shd.position.y = 0.003; g.add(shd);
+  return g;
+}
+
+// ============================================================
+//  INTERACTABLE SYSTEM
+// ============================================================
+var roomInteractables = [];  // { type, worldPos, data, mesh, alive }
+var activeBeams = [];        // { mesh, dir, speed, age }
+
+var memoPopupEl   = document.getElementById('memo-popup');
+var memoLabelEl   = document.getElementById('memo-label');
+var shootBtnEl    = document.getElementById('shoot-btn');
+var crosshairEl   = document.getElementById('crosshair-hit');
+
+function clearInteractables() {
+  roomInteractables = [];
+  activeBeams = [];
+  memoPopupEl.classList.remove('visible');
+  memoLabelEl.classList.remove('visible');
+  shootBtnEl.classList.remove('visible');
+  crosshairEl.classList.remove('aimed');
+}
+
+function registerInteractable(type, worldX, worldY, worldZ, data, mesh) {
+  roomInteractables.push({
+    type: type,
+    pos: new THREE.Vector3(worldX, worldY, worldZ),
+    data: data,
+    mesh: mesh,
+    alive: true
+  });
+}
+
+function fireBeam() {
+  if (transitioning) return;
+  // Create expanding ring beam
+  var beamGeo = new THREE.TorusGeometry(0.18, 0.04, 8, 32);
+  var beamMat = new THREE.MeshStandardMaterial({
+    color: 0xff2020, emissive: new THREE.Color(0xff0000),
+    emissiveIntensity: 4.0, transparent: true, opacity: 0.88
+  });
+  var beam = new THREE.Mesh(beamGeo, beamMat);
+  // Position at camera, face look direction
+  var dir = new THREE.Vector3(0, 0, -1);
+  dir.applyEuler(camera.rotation);
+  beam.position.copy(camera.position).addScaledVector(dir, 0.6);
+  beam.lookAt(camera.position.clone().addScaledVector(dir, 10));
+  scene.add(beam);
+  // Point light on beam
+  var bpl = new THREE.PointLight(0xff2020, 3.0, 4.0, 2.0);
+  bpl.position.copy(beam.position);
+  scene.add(bpl);
+  activeBeams.push({ mesh: beam, light: bpl, dir: dir.clone(), speed: 0.32, age: 0 });
+  // Sound-like camera punch
+  camera.position.addScaledVector(dir, -0.05);
+}
+
+shootBtnEl.addEventListener('click', fireBeam);
+shootBtnEl.addEventListener('touchend', function(e) { e.preventDefault(); fireBeam(); }, {passive:false});
+
+function updateInteractables(dt) {
+  if (!currentRoom) return;
+  var camPos = camera.position;
+  var showMemo = false, showMemoText = '';
+  var showShoot = false;
+
+  // Update beams
+  for (var bi = activeBeams.length - 1; bi >= 0; bi--) {
+    var b = activeBeams[bi];
+    b.age += dt;
+    b.mesh.position.addScaledVector(b.dir, b.speed);
+    b.light.position.copy(b.mesh.position);
+    // Grow radius
+    var scale = 1.0 + b.age * 3.5;
+    b.mesh.scale.set(scale, scale, 1.0);
+    b.mesh.material.opacity = Math.max(0, 0.88 - b.age * 0.7);
+    b.light.intensity = Math.max(0, 3.0 - b.age * 4.0);
+    // Check creature hits
+    for (var ci = 0; ci < roomInteractables.length; ci++) {
+      var itc = roomInteractables[ci];
+      if (itc.type !== 'creature' || !itc.alive) continue;
+      var dist = b.mesh.position.distanceTo(itc.pos);
+      if (dist < 0.9 + scale * 0.5) {
+        // Hit!
+        itc.alive = false;
+        scene.remove(itc.mesh);
+        // Flash
+        var flash = new THREE.PointLight(0xff4400, 8.0, 5.0, 2.0);
+        flash.position.copy(itc.pos);
+        scene.add(flash);
+        setTimeout(function() { scene.remove(flash); }, 400);
+      }
+    }
+    if (b.age > 2.5 || b.mesh.material.opacity <= 0) {
+      scene.remove(b.mesh);
+      scene.remove(b.light);
+      activeBeams.splice(bi, 1);
+    }
+  }
+
+  // Check proximity to interactables
+  for (var i = 0; i < roomInteractables.length; i++) {
+    var it = roomInteractables[i];
+    if (!it.alive) continue;
+    var d = camPos.distanceTo(it.pos);
+
+    if (it.type === 'memo') {
+      if (d < 3.5) {
+        showMemo = true;
+        showMemoText = it.data.text;
+      }
+    } else if (it.type === 'creature') {
+      if (d < 7.0) {
+        // Check if aimed at creature (project to screen)
+        var cp = it.pos.clone().project(camera);
+        var screenDist = Math.sqrt(cp.x*cp.x + cp.y*cp.y);
+        if (screenDist < 0.25 && cp.z < 1.0 && d < 6.0) {
+          showShoot = true;
+        }
+      }
+      // Animate creature bob + eye flicker
+      if (it.mesh) {
+        it.mesh.userData.phase = (it.mesh.userData.phase || 0) + dt * 1.2;
+        it.mesh.position.y = it.mesh.userData.baseY + Math.sin(it.mesh.userData.phase) * 0.06;
+        it.mesh.rotation.y += dt * 0.18;
+        if (it.mesh.userData.eyePl) {
+          it.mesh.userData.eyePl.intensity = 1.2 + Math.sin(it.mesh.userData.phase * 3.1) * 0.4;
+        }
+      }
+    }
+  }
+
+  // Update UI
+  if (showMemo) {
+    memoPopupEl.textContent = showMemoText;
+    memoPopupEl.classList.add('visible');
+    memoLabelEl.classList.remove('visible');
+  } else {
+    memoPopupEl.classList.remove('visible');
+    // Show label if close but not reading distance
+    var nearMemo = false;
+    for (var j = 0; j < roomInteractables.length; j++) {
+      if (roomInteractables[j].type==='memo' && roomInteractables[j].alive) {
+        if (camPos.distanceTo(roomInteractables[j].pos) < 6.0) nearMemo = true;
+      }
+    }
+    memoLabelEl.classList.toggle('visible', nearMemo);
+  }
+  shootBtnEl.classList.toggle('visible', showShoot);
+  crosshairEl.classList.toggle('aimed', showShoot);
+}
+
 // --- Mega room additional objects ---
 function buildMegaObelisk(R2, H) {
   var g = new THREE.Group();
@@ -2387,11 +2869,48 @@ function buildRoom(seed) {
     grp.add(exGrp);
   }
 
-  // ---- room info label ----
-  var roomInfoEl2 = document.getElementById('room-info');
+  // ---- wall paintings ----
   var shapeLabel = { rect:'ROOM',hex:'HEX',cylinder:'CYLINDER',dome:'DOME',
     lshape:'L-SHAPE',cross:'CROSS',atrium:'ATRIUM',cave:'CAVE',
     brutalist:'BRUTALIST',narrow:'CORRIDOR',octagon:'OCTAGON',vault:'VAULT' };
+  var paintableShapes = ['rect','lshape','cross','brutalist','atrium','vault','narrow','octagon','hex'];
+  if (paintableShapes.indexOf(shapeType) >= 0) {
+    addWallPaintings(grp, W, D, H, hw, hd, R2, pal);
+  }
+
+  // ---- interactables (memo + creature) ----
+  var interactables = [];
+  // Rare memo (25% chance)
+  if (R2() < 0.25) {
+    var memoText = MEMO_TEXTS[Math.floor(R2() * MEMO_TEXTS.length)];
+    var memoMesh = buildMemoNote(R2);
+    // Place on a wall (front or side, mid-height)
+    var mWallSide = Math.floor(R2()*4);
+    var mInset = WALL_T/2 + 0.007;
+    var mHangY = 1.4 + R2()*0.4;
+    if (mWallSide===0) {
+      memoMesh.position.set((R2()-0.5)*W*0.5, mHangY, -hd+mInset); memoMesh.rotation.y=0;
+    } else if (mWallSide===1) {
+      memoMesh.position.set((R2()-0.5)*W*0.5, mHangY, hd-mInset); memoMesh.rotation.y=Math.PI;
+    } else if (mWallSide===2) {
+      memoMesh.position.set(-hw+mInset, mHangY, (R2()-0.5)*D*0.5); memoMesh.rotation.y=Math.PI/2;
+    } else {
+      memoMesh.position.set(hw-mInset, mHangY, (R2()-0.5)*D*0.5); memoMesh.rotation.y=-Math.PI/2;
+    }
+    grp.add(memoMesh);
+    interactables.push({ type:'memo', lx:memoMesh.position.x, ly:mHangY+0.05, lz:memoMesh.position.z, data:{text:memoText}, mesh:memoMesh });
+  }
+  // Very rare creature (15% chance)
+  if (R2() < 0.15) {
+    var crMesh = buildCreature(R2);
+    var crX = (R2()-0.5)*Math.max(2, W-6);
+    var crZ = (R2()-0.5)*Math.max(2, D-6);
+    crMesh.position.set(crX, 0, crZ);
+    crMesh.rotation.y = R2()*Math.PI*2;
+    crMesh.userData.baseY = 0;
+    grp.add(crMesh);
+    interactables.push({ type:'creature', lx:crX, ly:0.8, lz:crZ, data:{}, mesh:crMesh });
+  }
 
   // ---- door trigger data ----
   var doors = [{ wall:'front', dx:frontDX, dz:0, seed:Math.floor(R2()*99991)+1 }];
@@ -2402,6 +2921,7 @@ function buildRoom(seed) {
   return { group:grp, W:W, D:D, H:H, hw:hw, hd:hd,
            DOOR_W:DOOR_W, DOOR_H:DOOR_H, doors:doors,
            shapeType:shapeType, shapeLabel:shapeLabel,
+           interactables: interactables,
            fogNear:fogNear, fogFar:fogFar };
 }
 
@@ -2431,6 +2951,13 @@ function spawnRoom(seed) {
   var r = buildRoom(seed);
   r.group.position.set(0, 0, 0);
   scene.add(r.group);
+  // Register interactables for this room
+  clearInteractables();
+  if (r.interactables) {
+    r.interactables.forEach(function(it) {
+      registerInteractable(it.type, it.lx, it.ly, it.lz, it.data, it.mesh);
+    });
+  }
   return r;
 }
 
@@ -2730,6 +3257,7 @@ function animate() {
   }
 
   renderer.render(scene, camera);
+  updateInteractables(dt);
 }
 
 /* loading done */
