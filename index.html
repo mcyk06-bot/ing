@@ -278,7 +278,7 @@ var VHS_FRAG = [
   '  col.b = texture2D(tDiffuse, uv-vec2( shift, shift*0.3)).b;',
   '  col.a = 1.0;',
   /* scanlines */
-  '  float scan = sin(uv.y*resolution.y*1.1)*0.030;',
+  '  float scan = sin(uv.y*resolution.y*1.7)*0.030;',
   '  col.rgb -= clamp(scan,0.0,1.0);',
   /* horizontal glitch band */
   '  float gs = floor(time*0.6);',
