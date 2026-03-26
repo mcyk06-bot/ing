@@ -737,6 +737,72 @@ function mkMesh(geo, mat) {
   m.receiveShadow = true;
   return m;
 }
+/* ----------------------------------------------------------
+   Drop-shadow helper  (gradient blob, replaces solid circle)
+---------------------------------------------------------- */
+var _shadowTexCache = null;
+function getShadowTex() {
+  if (_shadowTexCache) return _shadowTexCache;
+  var S = 256;
+  var cv = document.createElement('canvas');
+  cv.width = cv.height = S;
+  var cx2 = cv.getContext('2d');
+  var gr = cx2.createRadialGradient(S/2, S/2, 0, S/2, S/2, S/2);
+  gr.addColorStop(0,    'rgba(0,0,0,0.92)');
+  gr.addColorStop(0.18, 'rgba(0,0,0,0.80)');
+  gr.addColorStop(0.40, 'rgba(0,0,0,0.52)');
+  gr.addColorStop(0.65, 'rgba(0,0,0,0.22)');
+  gr.addColorStop(0.85, 'rgba(0,0,0,0.07)');
+  gr.addColorStop(1.0,  'rgba(0,0,0,0)');
+  cx2.fillStyle = gr;
+  cx2.fillRect(0, 0, S, S);
+  _shadowTexCache = new THREE.CanvasTexture(cv);
+  return _shadowTexCache;
+}
+
+/* rx, rz = half-extents; opacity = overall master opacity */
+function makeDropShadow(rx, rz, opacity) {
+  opacity = (opacity !== undefined) ? opacity : 0.58;
+  var mat = new THREE.MeshBasicMaterial({
+    map: getShadowTex(),
+    transparent: true,
+    opacity: opacity,
+    depthWrite: false
+  });
+  var shd = new THREE.Mesh(new THREE.PlaneGeometry(rx * 2.4, rz * 2.4), mat);
+  shd.rotation.x = -Math.PI / 2;
+  shd.position.y  = 0.004;
+  return shd;
+}
+
+/* ----------------------------------------------------------
+   Rounded-box geometry  (used for "soft" objects)
+   Sharp / futuristic objects keep plain BoxGeometry.
+---------------------------------------------------------- */
+function createRoundedBoxGeo(width, height, depth, radius, segs) {
+  segs   = segs   || 3;
+  radius = Math.min(radius, Math.min(width, height, depth) * 0.499);
+  var hw = width  / 2 - radius;
+  var hh = height / 2 - radius;
+  var shape = new THREE.Shape();
+  shape.absarc( hw,  hh, radius,           0, Math.PI / 2,    false);
+  shape.absarc(-hw,  hh, radius, Math.PI / 2, Math.PI,        false);
+  shape.absarc(-hw, -hh, radius, Math.PI,     Math.PI * 1.5,  false);
+  shape.absarc( hw, -hh, radius, Math.PI * 1.5, Math.PI * 2,  false);
+  var ext = new THREE.ExtrudeGeometry(shape, {
+    depth:          Math.max(0.001, depth - radius * 2),
+    bevelEnabled:   true,
+    bevelSegments:  segs,
+    steps:          1,
+    bevelSize:      radius,
+    bevelThickness: radius,
+    curveSegments:  segs * 4
+  });
+  ext.center();
+  return ext;
+}
+
+
 
 /* ----------------------------------------------------------
    Wall details
@@ -824,15 +890,7 @@ function buildMonolith(R2, H2) {
   );
   m.position.y = h / 2;
   g.add(m);
-  var shd = mkMesh(
-    new THREE.CircleGeometry(Math.max(w, d) * 0.85, 16),
-    new THREE.MeshStandardMaterial({
-      color: 0x000000, transparent: true,
-      opacity: 0.18, roughness: 1, depthWrite: false
-    })
-  );
-  shd.rotation.x = -Math.PI / 2;
-  shd.position.y = 0.005;
+  var shd = makeDropShadow(Math.max(w, d) * 0.85, Math.max(w, d) * 0.85, 0.63);
   g.add(shd);
   return g;
 }
@@ -851,15 +909,7 @@ function buildSphere(R2) {
   );
   s.position.y = r;
   g.add(s);
-  var shd = mkMesh(
-    new THREE.CircleGeometry(r * 0.9, 20),
-    new THREE.MeshStandardMaterial({
-      color: 0x000000, transparent: true,
-      opacity: 0.15, roughness: 1, depthWrite: false
-    })
-  );
-  shd.rotation.x = -Math.PI / 2;
-  shd.position.y = 0.005;
+  var shd = makeDropShadow(r * 0.9, r * 0.9, 0.53);
   g.add(shd);
   return g;
 }
@@ -895,15 +945,7 @@ function buildSculpture(R2) {
     part.rotation.y = R2() * Math.PI;
     g.add(part);
   }
-  var shd = mkMesh(
-    new THREE.CircleGeometry(0.5, 16),
-    new THREE.MeshStandardMaterial({
-      color: 0x000000, transparent: true,
-      opacity: 0.16, roughness: 1, depthWrite: false
-    })
-  );
-  shd.rotation.x = -Math.PI / 2;
-  shd.position.y = 0.005;
+  var shd = makeDropShadow(0.5, 0.5, 0.56);
   g.add(shd);
   return g;
 }
@@ -975,16 +1017,23 @@ function buildBench(R2) {
   var w = 1.5 + R2() * 1.5;
   var h = 0.4 + R2() * 0.2;
   var d = 0.4 + R2() * 0.2;
-  var mat = matStd(0xeeeeee, 0.9, 0.1); 
-  var top = mkMesh(new THREE.BoxGeometry(w, 0.05, d), mat);
+  var mat = matStd(0xeeeeee, 0.88, 0.05);
+  // Rounded seat top
+  var top = mkMesh(createRoundedBoxGeo(w, 0.06, d, 0.018, 3), mat);
   top.position.y = h;
   g.add(top);
-  var leg1 = mkMesh(new THREE.BoxGeometry(0.05, h, d * 0.8), mat);
-  leg1.position.set(-w/2 + 0.2, h/2, 0);
-  g.add(leg1);
-  var leg2 = mkMesh(new THREE.BoxGeometry(0.05, h, d * 0.8), mat);
-  leg2.position.set(w/2 - 0.2, h/2, 0);
-  g.add(leg2);
+  // Round legs (cylinder)
+  var legMat = matStd(0xe0e0e0, 0.82, 0.08);
+  var legGeo = new THREE.CylinderGeometry(0.022, 0.022, h, 12);
+  var offX = w / 2 - 0.18;
+  var offZ = d * 0.32;
+  [[-offX,-offZ],[-offX,offZ],[offX,-offZ],[offX,offZ]].forEach(function(p) {
+    var leg = mkMesh(legGeo, legMat.clone());
+    leg.position.set(p[0], h / 2, p[1]);
+    g.add(leg);
+  });
+  var shd = makeDropShadow(w * 0.55, d * 0.55, 0.50);
+  g.add(shd);
   return g;
 }
 
@@ -1285,15 +1334,7 @@ function buildWaterFeature(R2) {
   }
 
   // -- Shadow under basin --
-  var shd = mkMesh(
-    new THREE.CircleGeometry(Math.max(w, d) * 0.72, 24),
-    new THREE.MeshStandardMaterial({
-      color: 0x000000, transparent: true,
-      opacity: 0.16, roughness: 1, depthWrite: false
-    })
-  );
-  shd.rotation.x = -Math.PI / 2;
-  shd.position.y = 0.003;
+  var shd = makeDropShadow(Math.max(w, d) * 0.72, Math.max(w, d) * 0.72, 0.56);
   g.add(shd);
 
   // -- Register for animation --
@@ -1415,9 +1456,8 @@ function buildObelisk(R2, H) {
   tip.position.y = h * 0.88 + h * 0.06; tip.rotation.y = Math.PI / 4; g.add(tip);
   var plate = mkMesh(new THREE.BoxGeometry(base * 2.8, 0.07, base * 2.8), mat.clone());
   plate.position.y = 0.035; g.add(plate);
-  var shd = mkMesh(new THREE.CircleGeometry(base * 1.8, 20),
-    new THREE.MeshStandardMaterial({ color: 0x000000, transparent: true, opacity: 0.14, roughness: 1, depthWrite: false }));
-  shd.rotation.x = -Math.PI / 2; shd.position.y = 0.005; g.add(shd);
+  var shd = makeDropShadow(base * 1.8, base * 1.8, 0.49);
+  g.add(shd);
   return g;
 }
 
@@ -1433,9 +1473,8 @@ function buildTorus(R2) {
   if (tilt === 0) torus.rotation.x = Math.PI / 2;
   else if (tilt === 1) { torus.rotation.x = Math.PI / 5; torus.rotation.z = Math.PI / 7; }
   g.add(torus);
-  var shd = mkMesh(new THREE.CircleGeometry(r * 0.95, 24),
-    new THREE.MeshStandardMaterial({ color: 0x000000, transparent: true, opacity: 0.11, roughness: 1, depthWrite: false }));
-  shd.rotation.x = -Math.PI / 2; shd.position.y = 0.005; g.add(shd);
+  var shd = makeDropShadow(r * 0.95, r * 0.95, 0.39);
+  g.add(shd);
   return g;
 }
 
@@ -1479,9 +1518,8 @@ function buildArch(R2, H) {
   var archR = w / 2 + t / 2;
   var arch = mkMesh(new THREE.TorusGeometry(archR, t / 2, 10, 40, Math.PI), mat.clone());
   arch.position.set(0, h, 0); arch.rotation.z = Math.PI; g.add(arch);
-  var shd = mkMesh(new THREE.CircleGeometry(w * 0.65, 20),
-    new THREE.MeshStandardMaterial({ color: 0x000000, transparent: true, opacity: 0.12, roughness: 1, depthWrite: false }));
-  shd.rotation.x = -Math.PI / 2; shd.position.y = 0.005; g.add(shd);
+  var shd = makeDropShadow(w * 0.65, w * 0.65, 0.42);
+  g.add(shd);
   return g;
 }
 
@@ -1493,9 +1531,8 @@ function buildPyramid(R2) {
   var mat = matStd(cols[Math.floor(R2() * cols.length)], 0.25 + R2() * 0.5, R2() * 0.5);
   var pyr = mkMesh(new THREE.CylinderGeometry(0, base, h, 4), mat);
   pyr.position.y = h / 2; pyr.rotation.y = Math.PI / 4; g.add(pyr);
-  var shd = mkMesh(new THREE.CircleGeometry(base * 1.1, 16),
-    new THREE.MeshStandardMaterial({ color: 0x000000, transparent: true, opacity: 0.14, roughness: 1, depthWrite: false }));
-  shd.rotation.x = -Math.PI / 2; shd.position.y = 0.005; g.add(shd);
+  var shd = makeDropShadow(base * 1.1, base * 1.1, 0.49);
+  g.add(shd);
   return g;
 }
 
@@ -1514,9 +1551,8 @@ function buildMirrorPillar(R2, H) {
   var cap = mkMesh(new THREE.CylinderGeometry(r * 1.25, r * 1.25, 0.05, 32),
     matStd(0x060606, 0.02, 0.99));
   cap.position.y = h + 0.025; g.add(cap);
-  var shd = mkMesh(new THREE.CircleGeometry(r * 1.8, 20),
-    new THREE.MeshStandardMaterial({ color: 0x000000, transparent: true, opacity: 0.22, roughness: 1, depthWrite: false }));
-  shd.rotation.x = -Math.PI / 2; shd.position.y = 0.005; g.add(shd);
+  var shd = makeDropShadow(r * 1.8, r * 1.8, 0.72);
+  g.add(shd);
   return g;
 }
 
@@ -1536,9 +1572,8 @@ function buildCrystal(R2) {
   g.add(crystal);
   var pl = new THREE.PointLight(0xd0ecff, 1.4, r * 6, 2.0);
   pl.position.y = r + 0.1; g.add(pl);
-  var shd = mkMesh(new THREE.CircleGeometry(r * 0.8, 16),
-    new THREE.MeshStandardMaterial({ color: 0x000000, transparent: true, opacity: 0.1, roughness: 1, depthWrite: false }));
-  shd.rotation.x = -Math.PI / 2; shd.position.y = 0.005; g.add(shd);
+  var shd = makeDropShadow(r * 0.8, r * 0.8, 0.35);
+  g.add(shd);
   return g;
 }
 
@@ -1554,15 +1589,14 @@ function buildStackedBoxes(R2) {
   for (var i = 0; i < n; i++) {
     var sz = baseSize * (1.0 - i * 0.06);
     var bh = sz * (0.5 + R2() * 0.7);
-    var box = mkMesh(new THREE.BoxGeometry(sz, bh, sz * (0.6 + R2() * 0.6)),
+    var box = mkMesh(createRoundedBoxGeo(sz, bh, sz * (0.6 + R2() * 0.6), sz * 0.045, 3),
       mats[Math.floor(R2() * mats.length)].clone());
     box.position.y = y + bh / 2;
     box.rotation.y = R2() * Math.PI;
     g.add(box); y += bh;
   }
-  var shd = mkMesh(new THREE.CircleGeometry(baseSize * 0.9, 16),
-    new THREE.MeshStandardMaterial({ color: 0x000000, transparent: true, opacity: 0.14, roughness: 1, depthWrite: false }));
-  shd.rotation.x = -Math.PI / 2; shd.position.y = 0.005; g.add(shd);
+  var shd = makeDropShadow(baseSize * 0.9, baseSize * 0.9, 0.49);
+  g.add(shd);
   return g;
 }
 
@@ -1597,9 +1631,8 @@ function buildWireframeCube(R2) {
   var ped = mkMesh(new THREE.CylinderGeometry(0.13, 0.13, 0.25, 16),
     matStd(0x111111, 0.85, 0.1));
   ped.position.y = 0.125; g.add(ped);
-  var shd = mkMesh(new THREE.CircleGeometry(0.3, 16),
-    new THREE.MeshStandardMaterial({ color: 0x000000, transparent: true, opacity: 0.12, roughness: 1, depthWrite: false }));
-  shd.rotation.x = -Math.PI / 2; shd.position.y = 0.005; g.add(shd);
+  var shd = makeDropShadow(0.3, 0.3, 0.42);
+  g.add(shd);
   return g;
 }
 
@@ -1655,9 +1688,8 @@ function buildOrb(R2, H) {
   orb.position.y = pedH + orbR + 0.04; g.add(orb);
   var pl = new THREE.PointLight(col, 3.0, orbR * 18, 2.0);
   pl.position.y = pedH + orbR + 0.04; g.add(pl);
-  var shd = mkMesh(new THREE.CircleGeometry(pedR * 2.5, 16),
-    new THREE.MeshStandardMaterial({ color: 0x000000, transparent: true, opacity: 0.2, roughness: 1, depthWrite: false }));
-  shd.rotation.x = -Math.PI / 2; shd.position.y = 0.005; g.add(shd);
+  var shd = makeDropShadow(pedR * 2.5, pedR * 2.5, 0.7);
+  g.add(shd);
   return g;
 }
 
@@ -1674,11 +1706,10 @@ function buildSlab(R2) {
   var sup = mkMesh(new THREE.BoxGeometry(0.06, pedH, 0.06), matStd(0x1a1a1a, 0.8, 0.2));
   sup.position.y = pedH / 2; g.add(sup);
   // The slab
-  var slab = mkMesh(new THREE.BoxGeometry(w, h, d), mat);
+  var slab = mkMesh(createRoundedBoxGeo(w, h, d, Math.min(h, 0.025), 2), mat);
   slab.position.y = pedH; g.add(slab);
-  var shd = mkMesh(new THREE.CircleGeometry(Math.max(w, d) * 0.55, 20),
-    new THREE.MeshStandardMaterial({ color: 0x000000, transparent: true, opacity: 0.13, roughness: 1, depthWrite: false }));
-  shd.rotation.x = -Math.PI / 2; shd.position.y = 0.005; g.add(shd);
+  var shd = makeDropShadow(Math.max(w, d) * 0.55, Math.max(w, d) * 0.55, 0.46);
+  g.add(shd);
   return g;
 }
 
@@ -1739,9 +1770,8 @@ function buildUnicorn(R2) {
   // Pedestal
   var ped = mkMesh(new THREE.BoxGeometry(1.0*s, 0.1*s, 0.6*s), matStd(0xeeeae4, 0.7, 0.05));
   ped.position.y = 0.05*s; g.add(ped);
-  var shd = mkMesh(new THREE.CircleGeometry(0.55*s, 20),
-    new THREE.MeshStandardMaterial({color:0x000000,transparent:true,opacity:0.16,roughness:1,depthWrite:false}));
-  shd.rotation.x = -Math.PI/2; shd.position.y = 0.003; g.add(shd);
+  var shd = makeDropShadow(0.55*s, 0.55*s, 0.56);
+  g.add(shd);
   return g;
 }
 
@@ -1788,9 +1818,8 @@ function buildOilTimer(R2) {
   // Glow from oil
   var pl = new THREE.PointLight(oilCol, 2.0, s*4.5, 2.0);
   pl.position.y = 0.55*s; g.add(pl);
-  var shd = mkMesh(new THREE.CircleGeometry(0.35*s, 16),
-    new THREE.MeshStandardMaterial({color:0x000000,transparent:true,opacity:0.18,roughness:1,depthWrite:false}));
-  shd.rotation.x=-Math.PI/2; shd.position.y=0.003; g.add(shd);
+  var shd = makeDropShadow(0.35*s, 0.35*s, 0.63);
+  g.add(shd);
   return g;
 }
 
@@ -1802,7 +1831,7 @@ function buildGiantSpeaker(R2, H) {
   var d = 0.55 + R2() * 0.85;
 
   var matCab = matStd(0x0f0f0f, 0.12 + R2() * 0.25, 0.35 + R2() * 0.25);
-  var body = mkMesh(new THREE.BoxGeometry(w, h, d), matCab);
+  var body = mkMesh(createRoundedBoxGeo(w, h, d, 0.035, 3), matCab);
   body.position.y = h / 2;
   g.add(body);
 
@@ -1852,12 +1881,7 @@ function buildGiantSpeaker(R2, H) {
   });
 
   // Shadow
-  var shd = mkMesh(
-    new THREE.CircleGeometry(Math.max(w, d) * 0.55, 20),
-    new THREE.MeshStandardMaterial({ color: 0x000000, transparent: true, opacity: 0.18, roughness: 1, depthWrite: false })
-  );
-  shd.rotation.x = -Math.PI / 2;
-  shd.position.y = 0.003;
+  var shd = makeDropShadow(Math.max(w, d) * 0.55, Math.max(w, d) * 0.55, 0.63);
   g.add(shd);
   return g;
 }
@@ -1875,7 +1899,7 @@ function buildSubstationTransformer(R2, H) {
   g.add(platform);
 
   var bodyMat = matStd(0x0f0f0f, 0.18 + R2() * 0.22, 0.25 + R2() * 0.2);
-  var tank = mkMesh(new THREE.BoxGeometry(w * 0.58, h * 0.42, d * 0.42), bodyMat);
+  var tank = mkMesh(createRoundedBoxGeo(w * 0.58, h * 0.42, d * 0.42, 0.030, 3), bodyMat);
   tank.position.y = h * 0.38;
   g.add(tank);
 
@@ -1908,12 +1932,7 @@ function buildSubstationTransformer(R2, H) {
   pl.position.copy(led.position);
   g.add(pl);
 
-  var shd = mkMesh(
-    new THREE.CircleGeometry(Math.max(w, d) * 0.75, 20),
-    new THREE.MeshStandardMaterial({ color: 0x000000, transparent: true, opacity: 0.15, roughness: 1, depthWrite: false })
-  );
-  shd.rotation.x = -Math.PI / 2;
-  shd.position.y = 0.003;
+  var shd = makeDropShadow(Math.max(w, d) * 0.75, Math.max(w, d) * 0.75, 0.53);
   g.add(shd);
   return g;
 }
@@ -1927,7 +1946,7 @@ function buildDJBooth(R2, H) {
   var panelH = 1.0 + R2() * 0.9;
 
   var topMat = matStd(0x111111, 0.22 + R2() * 0.20, 0.75);
-  var top = mkMesh(new THREE.BoxGeometry(w, tableH, d), topMat);
+  var top = mkMesh(createRoundedBoxGeo(w, tableH, d, 0.022, 3), topMat);
   top.position.y = tableH / 2;
   g.add(top);
 
@@ -2006,12 +2025,7 @@ function buildDJBooth(R2, H) {
   pl2.position.set(0, tableH + 0.85, -d/2 + d * 0.02);
   g.add(pl2);
 
-  var shd = mkMesh(
-    new THREE.CircleGeometry(Math.max(w, d) * 0.65, 20),
-    new THREE.MeshStandardMaterial({ color: 0x000000, transparent: true, opacity: 0.16, roughness: 1, depthWrite: false })
-  );
-  shd.rotation.x = -Math.PI / 2;
-  shd.position.y = 0.003;
+  var shd = makeDropShadow(Math.max(w, d) * 0.65, Math.max(w, d) * 0.65, 0.56);
   g.add(shd);
 
   return g;
@@ -2026,7 +2040,7 @@ function buildAnalogSynth(R2, H) {
   var panelH = 0.55 + R2() * 0.6;
 
   var baseMat = matStd(0x0f0f0f, 0.20, 0.55);
-  var base = mkMesh(new THREE.BoxGeometry(w, baseH, d), baseMat);
+  var base = mkMesh(createRoundedBoxGeo(w, baseH, d, 0.025, 3), baseMat);
   base.position.y = baseH / 2;
   g.add(base);
 
@@ -2098,12 +2112,7 @@ function buildAnalogSynth(R2, H) {
   pl.position.set(0, baseH + panelH * 0.82, d / 2 + 0.10);
   g.add(pl);
 
-  var shd = mkMesh(
-    new THREE.CircleGeometry(Math.max(w, d) * 0.60, 20),
-    new THREE.MeshStandardMaterial({ color: 0x000000, transparent: true, opacity: 0.14, roughness: 1, depthWrite: false })
-  );
-  shd.rotation.x = -Math.PI / 2;
-  shd.position.y = 0.003;
+  var shd = makeDropShadow(Math.max(w, d) * 0.60, Math.max(w, d) * 0.60, 0.49);
   g.add(shd);
   return g;
 }
@@ -2116,7 +2125,7 @@ function buildAnalogEqualizer(R2, H) {
   var h = 1.5 + R2() * 1.8;
 
   var rackMat = matStd(0x0f0f0f, 0.18, 0.65);
-  var rack = mkMesh(new THREE.BoxGeometry(w, 0.18, d), rackMat);
+  var rack = mkMesh(createRoundedBoxGeo(w, 0.18, d, 0.018, 3), rackMat);
   rack.position.set(0, 0.18 / 2, 0);
   g.add(rack);
 
@@ -2148,12 +2157,7 @@ function buildAnalogEqualizer(R2, H) {
   pl.position.set(0, h * 0.65, d * 0.22);
   g.add(pl);
 
-  var shd = mkMesh(
-    new THREE.CircleGeometry(Math.max(w, d) * 0.55, 20),
-    new THREE.MeshStandardMaterial({ color: 0x000000, transparent: true, opacity: 0.14, roughness: 1, depthWrite: false })
-  );
-  shd.rotation.x = -Math.PI / 2;
-  shd.position.y = 0.003;
+  var shd = makeDropShadow(Math.max(w, d) * 0.55, Math.max(w, d) * 0.55, 0.49);
   g.add(shd);
 
   return g;
@@ -2190,12 +2194,7 @@ function buildNeonSculpture(R2, H) {
   pl.position.set(0, baseY + 0.3, 0);
   g.add(pl);
 
-  var shd = mkMesh(
-    new THREE.CircleGeometry(radius * 1.25, 20),
-    new THREE.MeshStandardMaterial({ color: 0x000000, transparent: true, opacity: 0.12, roughness: 1, depthWrite: false })
-  );
-  shd.rotation.x = -Math.PI / 2;
-  shd.position.y = 0.003;
+  var shd = makeDropShadow(radius * 1.25, radius * 1.25, 0.42);
   g.add(shd);
 
   return g;
@@ -2292,9 +2291,8 @@ function buildHVAC(R2, H) {
     ctrl.position.set(unitW2*0.28, unitH2*0.55, unitD2/2+0.002); g.add(ctrl);
   }
 
-  var shd = mkMesh(new THREE.CircleGeometry(0.65, 20),
-    new THREE.MeshStandardMaterial({color:0x000000,transparent:true,opacity:0.18,roughness:1,depthWrite:false}));
-  shd.rotation.x=-Math.PI/2; shd.position.y=0.003; g.add(shd);
+  var shd = makeDropShadow(0.65, 0.65, 0.63);
+  g.add(shd);
   return g;
 }
 
@@ -2617,9 +2615,8 @@ function buildCreature(R2) {
   g.userData.wanderTimer  = 2.0 + R2() * 4.0;        // seconds until first move
   g.userData.wanderFacing = 0;
 
-  var shd = mkMesh(new THREE.CircleGeometry(0.42, 16),
-    new THREE.MeshStandardMaterial({color:0x000000,transparent:true,opacity:0.22,roughness:1,depthWrite:false}));
-  shd.rotation.x = -Math.PI/2; shd.position.y = 0.003; g.add(shd);
+  var shd = makeDropShadow(0.42, 0.42, 0.72);
+  g.add(shd);
   return g;
 }
 
@@ -2826,9 +2823,8 @@ function buildInsect(R2, forcedType) {
   }
 
   // Shadow
-  var shd=mkMesh(new THREE.CircleGeometry(0.48*s,16),
-    new THREE.MeshStandardMaterial({color:0x000000,transparent:true,opacity:0.28,roughness:1,depthWrite:false}));
-  shd.rotation.x=-Math.PI/2; shd.position.y=0.003; g.add(shd);
+  var shd = makeDropShadow(0.48*s, 0.48*s, 0.72);
+  g.add(shd);
 
   // Metadata for animation
   g.userData.isCreature    = true;
@@ -3230,9 +3226,8 @@ function buildAppleWatch(R2) {
   buck.rotation.z = Math.PI / 2;
   buck.position.set(0, 0.08 - bandH * 0.9 + 0.09, 0); g.add(buck);
   // Floor shadow
-  var shd = mkMesh(new THREE.CircleGeometry(0.52, 24),
-    new THREE.MeshStandardMaterial({ color: 0x000000, transparent: true, opacity: 0.22, roughness: 1, depthWrite: false }));
-  shd.rotation.x = -Math.PI / 2; shd.position.y = 0.003; g.add(shd);
+  var shd = makeDropShadow(0.52, 0.52, 0.72);
+  g.add(shd);
   return g;
 }
 
@@ -3291,9 +3286,8 @@ function buildPipeCluster(R2, H) {
     spoke.rotation.z = Math.PI / 2; spoke.rotation.y = sp * Math.PI / 4;
     spoke.position.set(vx - 0.35, 1.0 + R2() * 0.6, 0); g.add(spoke);
   }
-  var shd = mkMesh(new THREE.CircleGeometry(1.1, 20),
-    new THREE.MeshStandardMaterial({ color: 0x000000, transparent: true, opacity: 0.16, roughness: 1, depthWrite: false }));
-  shd.rotation.x = -Math.PI / 2; shd.position.y = 0.004; g.add(shd);
+  var shd = makeDropShadow(1.1, 1.1, 0.56);
+  g.add(shd);
   return g;
 }
 
@@ -3397,9 +3391,8 @@ function buildVHSUnit(R2) {
     kn.rotation.z = Math.PI / 2;
     kn.position.set(monW / 2 + 0.025, H + 0.25 + ki * 0.18, -0.1); g.add(kn);
   }
-  var shd = mkMesh(new THREE.CircleGeometry(0.62, 20),
-    new THREE.MeshStandardMaterial({ color: 0x000000, transparent: true, opacity: 0.2, roughness: 1, depthWrite: false }));
-  shd.rotation.x = -Math.PI / 2; shd.position.y = 0.003; g.add(shd);
+  var shd = makeDropShadow(0.62, 0.62, 0.7);
+  g.add(shd);
   return g;
 }
 
@@ -3494,9 +3487,8 @@ function buildCRTTV(R2) {
   antL.rotation.z = 0.38; antL.position.set(W * 0.15 - 0.13, H + 0.14 + 0.26, -D * 0.1); g.add(antL);
   var antR = mkMesh(new THREE.CylinderGeometry(0.008, 0.008, 0.55, 8), antMat.clone());
   antR.rotation.z = -0.38; antR.position.set(W * 0.15 + 0.13, H + 0.14 + 0.26, -D * 0.1); g.add(antR);
-  var shd = mkMesh(new THREE.CircleGeometry(W * 0.65, 20),
-    new THREE.MeshStandardMaterial({ color: 0x000000, transparent: true, opacity: 0.22, roughness: 1, depthWrite: false }));
-  shd.rotation.x = -Math.PI / 2; shd.position.y = 0.003; g.add(shd);
+  var shd = makeDropShadow(W * 0.65, W * 0.65, 0.72);
+  g.add(shd);
   return g;
 }
 
@@ -3545,9 +3537,8 @@ function buildVideoTape(R2) {
     tape2.rotation.y = (R2() - 0.5) * 0.6;
     g.add(tape2);
   }
-  var shd = mkMesh(new THREE.CircleGeometry(Math.max(tW, tD) * 0.62, 20),
-    new THREE.MeshStandardMaterial({ color: 0x000000, transparent: true, opacity: 0.18, roughness: 1, depthWrite: false }));
-  shd.rotation.x = -Math.PI / 2; shd.position.y = 0.003; g.add(shd);
+  var shd = makeDropShadow(Math.max(tW, tD) * 0.62, Math.max(tW, tD) * 0.62, 0.63);
+  g.add(shd);
   return g;
 }
 
