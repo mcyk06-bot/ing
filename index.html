@@ -492,6 +492,113 @@ function makeCeilTex(r, g, b) {
   return t;
 }
 
+// Floor micro-surface: roughness variation + bump height.
+function makeFloorRoughTex() {
+  var S = 512;
+  var cv = document.createElement('canvas');
+  cv.width = cv.height = S;
+  var cx = cv.getContext('2d');
+
+  // Mid-gray base = medium roughness
+  cx.fillStyle = '#8f8f8f';
+  cx.fillRect(0, 0, S, S);
+
+  // Random smooth/polished patches (lower roughness = brighter in map)
+  for (var i = 0; i < 12000; i++) {
+    var v = Math.floor(120 + Math.random() * 95); // 120..214
+    var a = 0.03 + Math.random() * 0.08;
+    cx.fillStyle = 'rgba(' + v + ',' + v + ',' + v + ',' + a + ')';
+    cx.fillRect(Math.random() * S, Math.random() * S, 2.0 + Math.random() * 3.5, 2.0 + Math.random() * 3.5);
+  }
+
+  // Scratches / streaks
+  for (var j = 0; j < 300; j++) {
+    var ly = Math.random() * S;
+    cx.strokeStyle = 'rgba(30,30,30,' + (0.06 + Math.random() * 0.14) + ')';
+    cx.lineWidth = 1 + Math.random() * 2.0;
+    cx.beginPath();
+    cx.moveTo(0, ly);
+    cx.lineTo(S, ly + (Math.random() - 0.5) * 16);
+    cx.stroke();
+  }
+
+  // Subtle corner darkening so edges feel more worn.
+  var g = cx.createRadialGradient(S * 0.5, S * 0.6, S * 0.05, S * 0.5, S * 0.6, S * 0.9);
+  g.addColorStop(0, 'rgba(255,255,255,0.0)');
+  g.addColorStop(1, 'rgba(0,0,0,0.22)');
+  cx.fillStyle = g;
+  cx.fillRect(0, 0, S, S);
+
+  var t = new THREE.CanvasTexture(cv);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  return t;
+}
+
+function makeFloorBumpTex() {
+  var S = 512;
+  var cv = document.createElement('canvas');
+  cv.width = cv.height = S;
+  var cx = cv.getContext('2d');
+
+  // Height map: mid gray baseline
+  cx.fillStyle = '#808080';
+  cx.fillRect(0, 0, S, S);
+
+  // Small noise
+  for (var i = 0; i < 26000; i++) {
+    var v = Math.floor(110 + Math.random() * 80); // 110..190
+    var a = 0.02 + Math.random() * 0.06;
+    cx.fillStyle = 'rgba(' + v + ',' + v + ',' + v + ',' + a + ')';
+    cx.fillRect(Math.random() * S, Math.random() * S, 1.0 + Math.random() * 1.6, 1.0 + Math.random() * 1.6);
+  }
+
+  // Directional micro scratches
+  for (var j = 0; j < 500; j++) {
+    var x0 = Math.random() * S;
+    var y0 = Math.random() * S;
+    var len = 6 + Math.random() * 22;
+    var ang = (Math.random() - 0.5) * Math.PI * 0.25;
+    cx.strokeStyle = 'rgba(15,15,15,' + (0.03 + Math.random() * 0.10) + ')';
+    cx.lineWidth = 0.8 + Math.random() * 1.4;
+    cx.beginPath();
+    cx.moveTo(x0, y0);
+    cx.lineTo(x0 + Math.cos(ang) * len, y0 + Math.sin(ang) * len);
+    cx.stroke();
+  }
+
+  var t = new THREE.CanvasTexture(cv);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  return t;
+}
+
+// Ceiling light shaft texture (vertical gradient).
+function makeLightShaftTex() {
+  var W = 64, H = 256;
+  var cv = document.createElement('canvas');
+  cv.width = W; cv.height = H;
+  var cx = cv.getContext('2d');
+  cx.clearRect(0, 0, W, H);
+
+  // Soft core + wider falloff.
+  for (var y = 0; y < H; y++) {
+    var t = y / (H - 1); // 0 at top, 1 at bottom
+    // Brighter in the mid (feels like haze in the ray)
+    var a = 0.00 + Math.max(0, 1 - Math.abs(t - 0.58) / 0.40) * 0.55;
+    // Side fade (fake volumetric width)
+    for (var x = 0; x < W; x++) {
+      var dx = Math.abs(x - W * 0.5) / (W * 0.5);
+      var side = Math.max(0, 1 - dx);
+      var alpha = a * side * 0.65;
+      var v = 255;
+      cx.fillStyle = 'rgba(' + v + ',' + v + ',' + v + ',' + alpha + ')';
+      cx.fillRect(x, y, 1, 1);
+    }
+  }
+
+  var t = new THREE.CanvasTexture(cv);
+  return t;
+}
+
 function rrect(cx, x, y, w, h, r) {
   cx.beginPath();
   cx.moveTo(x + r, y);
@@ -3918,12 +4025,23 @@ function buildRoom(seed) {
   wallRoughTex.repeat.set(W/4, H/4);
   var floorTex = makeFloorTex(pal.fr, pal.fg, pal.fb);
   floorTex.repeat.set(W/4, D/4);
+  var floorRoughTex = makeFloorRoughTex();
+  floorRoughTex.repeat.set(W/4, D/4);
+  var floorBumpTex  = makeFloorBumpTex();
+  floorBumpTex.repeat.set(W/4, D/4);
   var ceilTex  = makeCeilTex(
     Math.max(pal.wr-14,0), Math.max(pal.wg-14,0), Math.max(pal.wb-14,0));
   ceilTex.repeat.set(W/4, D/4);
 
   function wallMat()  { return new THREE.MeshStandardMaterial({ map:wallTex, roughnessMap:wallRoughTex, roughness:0.84, metalness:0.0 }); }
-  function floorMat() { return new THREE.MeshStandardMaterial({ map:floorTex, roughness:0.74, metalness:0.04 }); }
+  function floorMat() { return new THREE.MeshStandardMaterial({
+    map: floorTex,
+    roughnessMap: floorRoughTex,
+    roughness: 0.70,
+    bumpMap: floorBumpTex,
+    bumpScale: 0.06,
+    metalness: 0.05
+  }); }
   function ceilMat()  { return new THREE.MeshStandardMaterial({ map:ceilTex, roughness:0.90, metalness:0.0 }); }
 
   // ---- floor ----
@@ -3932,6 +4050,44 @@ function buildRoom(seed) {
     : new THREE.PlaneGeometry(W, D);
   var floor = mkMesh(floorGeo, floorMat());
   floor.rotation.x = -Math.PI/2; grp.add(floor);
+
+  // Edge wear: small dark bands along the floor/wall junction.
+  (function addFloorEdgeWear() {
+    var edgeCol = new THREE.Color(pal.wr / 255 * 0.70, pal.wg / 255 * 0.70, pal.wb / 255 * 0.70);
+    var edgeMat = new THREE.MeshStandardMaterial({
+      color: edgeCol,
+      roughness: 0.95,
+      metalness: 0.02
+    });
+    var y0 = 0.002;
+    var t = 0.014;
+    if (shapeType === 'dome' || shapeType === 'cylinder') {
+      var inner = hw * 0.88;
+      var outer = hw * 0.99;
+      var ring = mkMesh(new THREE.RingGeometry(inner, outer, 64), edgeMat);
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.y = y0;
+      grp.add(ring);
+    } else {
+      var zEdge = hd;
+      var xEdge = hw;
+      var inset = 0.005;
+      // front/back strips
+      var stripZ = mkMesh(new THREE.BoxGeometry(W, t, 0.06), edgeMat);
+      stripZ.position.set(0, y0 + t / 2, -zEdge + inset);
+      grp.add(stripZ);
+      var stripZ2 = mkMesh(new THREE.BoxGeometry(W, t, 0.06), edgeMat);
+      stripZ2.position.set(0, y0 + t / 2, zEdge - inset);
+      grp.add(stripZ2);
+      // left/right strips
+      var stripX = mkMesh(new THREE.BoxGeometry(0.06, t, D), edgeMat);
+      stripX.position.set(-xEdge + inset, y0 + t / 2, 0);
+      grp.add(stripX);
+      var stripX2 = mkMesh(new THREE.BoxGeometry(0.06, t, D), edgeMat);
+      stripX2.position.set(xEdge - inset, y0 + t / 2, 0);
+      grp.add(stripX2);
+    }
+  })();
 
   // ---- ceiling ----
   if (shapeType==='dome') {
@@ -4043,6 +4199,19 @@ function buildRoom(seed) {
   } else {
     var rows = Math.min(Math.ceil(D/8), isMega?4:2);
     var cols2 = Math.min(Math.ceil(W/8), isMega?4:2);
+    var shaftTex = makeLightShaftTex();
+    // Reuse a single material (rotation is per-mesh).
+    var shaftMat = new THREE.MeshBasicMaterial({
+      map: shaftTex,
+      transparent: true,
+      opacity: 0.36,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+      color: new THREE.Color(pal.lc)
+    });
+    var shaftAdded = 0;
+    var shaftMax = isMega ? 8 : 5;
     for (var ri=0; ri<rows; ri++) {
       for (var ci=0; ci<cols2; ci++) {
         var lx=-hw+(W/cols2)*(ci+0.5), lz=-hd+(D/rows)*(ri+0.5);
@@ -4054,6 +4223,18 @@ function buildRoom(seed) {
         sl.shadow.camera.near = 0.5;
         sl.shadow.camera.far  = H * 3;
         grp.add(sl); grp.add(sl.target);
+
+        // Light shaft (very low count, to keep performance stable).
+        if (shaftAdded < shaftMax && ((ri + ci) % 2 === 0)) {
+          var shaft = new THREE.Mesh(
+            new THREE.PlaneGeometry(1.0, H * 1.05),
+            shaftMat
+          );
+          shaft.position.set(lx, H * 0.52, lz);
+          shaft.rotation.y = (R2() - 0.5) * 0.35;
+          grp.add(shaft);
+          shaftAdded++;
+        }
       }
     }
   }
