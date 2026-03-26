@@ -2550,189 +2550,172 @@ function buildInsect(R2, forcedType) {
   var colMain = rndObjCol();
   var colDark = R2() > 0.5 ? 0x0c0c0a : OBJ_COLS[Math.floor(R2()*(OBJ_COLS.length-2)+2)];
 
-  if (type === 0) {
-    // ---- バッタ (Grasshopper) ----
-    var mat   = matStd(colMain, 0.22, 0.0);
-    var matDk = matStd(colDark, 0.30, 0.0);
-    // Body
-    var body = mkMesh(new THREE.BoxGeometry(0.28*s, 0.22*s, 0.75*s), mat);
-    body.position.y = 0.28*s; g.add(body);
-    // Abdomen tip
-    var abd = mkMesh(new THREE.BoxGeometry(0.06*s, 0.42*s, 0.11*s), mat.clone());
-    abd.rotation.x = -0.15; abd.position.set(0, 0.26*s, 0.5*s); g.add(abd);
-    // Head
-    var head = mkMesh(new THREE.BoxGeometry(0.20*s, 0.14*s, 0.30*s), mat.clone());
-    head.rotation.x = -0.12; head.position.set(0, 0.30*s, -0.48*s); g.add(head);
-    // Eyes
-    var eyeM = eyeMatGlow.clone();
-    [-0.08*s,0.08*s].forEach(function(ex){
-      var e = mkMesh(new THREE.SphereGeometry(0.05*s,8,6),eyeM);
-      e.position.set(ex,0.36*s,-0.6*s); g.add(e); eyeMeshes.push(e);
-    });
-    // Antennae
-    for (var ai=0;ai<2;ai++){
-      var sign=ai===0?-1:1;
-      var ant=mkMesh(new THREE.BoxGeometry(0.008*s, 0.52*s, 0.004*s),matDk.clone());
-      ant.rotation.z=sign*0.35; ant.rotation.x=-0.55;
-      ant.position.set(sign*0.07*s,0.44*s,-0.62*s); g.add(ant);
+  // Future organism materials (abstract / stylish)
+  var shellMat = matStd(colMain, 0.12 + R2() * 0.22, 0.45 + R2() * 0.35);
+  var darkMat  = matStd(colDark, 0.18 + R2() * 0.22, 0.35 + R2() * 0.35);
+  var glassMat = new THREE.MeshStandardMaterial({
+    color: colMain,
+    roughness: 0.06,
+    metalness: 0.08,
+    transparent: true,
+    opacity: 0.58 + R2() * 0.22
+  });
+  var accentCols = [0x00ffdd, 0xff0066, 0xffee00, 0x0088ff, 0xcc00ff, 0x00ff88];
+  var accent = accentCols[Math.floor(R2() * accentCols.length)];
+  var accentMat = new THREE.MeshStandardMaterial({
+    color: accent,
+    emissive: new THREE.Color(accent),
+    emissiveIntensity: 2.2 + R2() * 1.6,
+    roughness: 0.16,
+    metalness: 0.22
+  });
+
+  // Abstract tendrils (driven by leg animation system)
+  function addTendril(angle, radius, len, thickness, phaseOffset) {
+    var lg = new THREE.Group();
+    lg.position.set(Math.cos(angle) * radius, 0.12 * s, Math.sin(angle) * radius);
+    lg.rotation.y = angle + Math.PI / 2;
+    // 2-segment tendril so rotation.x reads well
+    var seg1 = mkMesh(new THREE.BoxGeometry(thickness, len * 0.55, thickness * 0.8), darkMat.clone());
+    seg1.position.set(0, -len * 0.18, 0);
+    seg1.rotation.z = (R2() - 0.5) * 0.55;
+    lg.add(seg1);
+    var seg2 = mkMesh(new THREE.BoxGeometry(thickness * 0.85, len * 0.55, thickness * 0.65), shellMat.clone());
+    seg2.position.set(0, -len * 0.60, 0.06 * s);
+    seg2.rotation.z = (R2() - 0.5) * 0.75;
+    lg.add(seg2);
+    // Tip shard
+    var tip = mkMesh(new THREE.BoxGeometry(thickness * 1.2, thickness * 0.55, thickness * 0.25), accentMat.clone());
+    tip.position.set(0, -len * 0.88, 0.04 * s);
+    lg.add(tip);
+
+    lg.userData.legPhaseOffset = phaseOffset;
+    legMeshes.push(lg);
+    g.add(lg);
+  }
+
+  function addEyesCluster(y, z, count, spread) {
+    var em = eyeMatGlow.clone();
+    for (var i = 0; i < count; i++) {
+      var ex = (R2() - 0.5) * spread;
+      var ey = y + (R2() - 0.5) * spread * 0.5;
+      var ez = z + (R2() - 0.5) * spread * 0.4;
+      var e = mkMesh(new THREE.SphereGeometry((0.03 + R2() * 0.028) * s, 10, 8), em);
+      e.position.set(ex, ey, ez);
+      g.add(e);
+      eyeMeshes.push(e);
     }
-    // Legs: 3 pairs (last pair = long hind legs)
-    var legDefs=[{z:-0.28*s,len:0.32*s,hind:false},{z:0.0*s,len:0.36*s,hind:false},{z:0.22*s,len:0.68*s,hind:true}];
-    legDefs.forEach(function(ld,li){
-      [-1,1].forEach(function(side){
-        var lg=new THREE.Group(); lg.position.set(side*0.14*s,0.26*s,ld.z);
-        var up=mkMesh(new THREE.BoxGeometry(0.02*s, ld.len*0.44, 0.015*s),mat.clone());
-        up.rotation.z=side*(ld.hind?0.55:0.42); up.rotation.x=ld.hind?0.45:0.18;
-        up.position.set(side*ld.len*0.17,-ld.len*0.08,ld.hind?-ld.len*0.08:0); lg.add(up);
-        var lo=mkMesh(new THREE.BoxGeometry(0.015*s, ld.len*0.52, 0.01*s),matDk.clone());
-        lo.rotation.z=side*(ld.hind?0.18:0.58); lo.rotation.x=ld.hind?-0.55:0.48;
-        lo.position.set(side*ld.len*0.36,-ld.len*0.32,ld.hind?ld.len*0.16:ld.len*0.08); lg.add(lo);
-        lg.userData.legPhaseOffset=(li*2+(side>0?1:0))*Math.PI/3;
-        legMeshes.push(lg); g.add(lg);
-      });
-    });
+  }
+
+  // 4 variants: all non-insect-like silhouettes
+  var coreY = (0.30 + R2() * 0.16) * s;
+  var coreR = (0.18 + R2() * 0.22) * s;
+  var baseRadius = (0.22 + R2() * 0.18) * s;
+
+  if (type === 0) {
+    // Variant A: faceted core + orbit ring + 6 tendrils
+    var core = mkMesh(new THREE.IcosahedronGeometry(coreR, 0), shellMat);
+    core.position.y = coreY;
+    core.rotation.set(R2() * 1.2, R2() * 1.2, R2() * 1.2);
+    g.add(core);
+
+    var ring = mkMesh(new THREE.TorusGeometry(coreR * 1.05, coreR * 0.10, 10, 48), accentMat.clone());
+    ring.position.y = coreY;
+    ring.rotation.x = Math.PI / 2 + (R2() - 0.5) * 0.35;
+    ring.rotation.y = (R2() - 0.5) * 0.6;
+    g.add(ring);
+
+    addEyesCluster(coreY + 0.02 * s, -coreR * 0.9, 2 + Math.floor(R2() * 2), 0.18 * s);
+
+    for (var i = 0; i < 6; i++) {
+      var a = (i / 6) * Math.PI * 2 + (R2() - 0.5) * 0.25;
+      addTendril(a, baseRadius, (0.55 + R2() * 0.35) * s, 0.05 * s, i * (Math.PI / 3));
+    }
 
   } else if (type === 1) {
-    // ---- イモムシ (Caterpillar) ----
-    var segCount = 8 + Math.floor(R2()*4);
-    var segR = 0.17*s;
-    var cSeg  = colMain;
-    var matS  = matStd(cSeg,   0.20, 0.0);
-    var matS2 = matStd(colDark, 0.28, 0.0);
-    var step  = segR * 1.55;
-    var span  = (segCount - 1) * step;
-    for (var si=0;si<segCount;si++){
-      var sr = si===0 ? segR*1.05 : (si===segCount-1 ? segR*0.72 : segR*(0.88+R2()*0.22));
-      var seg = mkMesh(
-        new THREE.BoxGeometry(sr*0.95, sr*0.42, sr*0.85),
-        si%2===0 ? matS.clone() : matS2.clone()
-      );
-      seg.position.set(0, sr*0.68, -si*step+span*0.5); g.add(seg);
+    // Variant B: translucent capsule + spine fins + 8 tendrils
+    var cap = mkMesh(new THREE.SphereGeometry(coreR * 1.15, 14, 10), glassMat);
+    cap.scale.set(1.2, 0.7, 1.4);
+    cap.position.y = coreY + 0.02 * s;
+    g.add(cap);
+
+    var spineN = 5 + Math.floor(R2() * 4);
+    for (var si = 0; si < spineN; si++) {
+      var t = si / Math.max(1, spineN - 1);
+      var finW = (0.08 + R2() * 0.06) * s;
+      var finH = (0.18 + R2() * 0.22) * s;
+      var fin = mkMesh(new THREE.BoxGeometry(finW, finH, 0.015 * s), accentMat.clone());
+      fin.position.set((R2() - 0.5) * 0.06 * s, coreY + finH * 0.25, (t - 0.5) * coreR * 2.4);
+      fin.rotation.y = (R2() - 0.5) * 0.6;
+      fin.rotation.x = (R2() - 0.5) * 0.4;
+      g.add(fin);
     }
-    // Head
-    var hd2 = mkMesh(new THREE.BoxGeometry(segR*1.22, segR*0.75, segR*0.95), matS.clone());
-    hd2.position.set(0,segR*0.82, span*0.5+segR*0.88); g.add(hd2);
-    var eyeM2 = eyeMatGlow.clone();
-    [-0.065*s,0.065*s].forEach(function(ex){
-      var e=mkMesh(new THREE.SphereGeometry(0.038*s,8,6),eyeM2);
-      e.position.set(ex,segR*1.1,span*0.5+segR*1.18); g.add(e); eyeMeshes.push(e);
-    });
-    // Stubby legs along body
-    var pairN = Math.floor(segCount*0.7);
-    for (var pi=0;pi<pairN;pi++){
-      [-1,1].forEach(function(side){
-        var lg=new THREE.Group();
-        var lz = pi*(span/pairN) - span*0.45;
-        lg.position.set(side*segR*0.88,segR*0.45,lz);
-        var stub=mkMesh(new THREE.BoxGeometry(0.018*s,0.2*s,0.024*s),matS2.clone());
-        stub.rotation.z=side*0.72; lg.add(stub);
-        lg.userData.legPhaseOffset=pi*Math.PI/(pairN*0.5)+(side>0?Math.PI:0);
-        legMeshes.push(lg); g.add(lg);
-      });
+
+    addEyesCluster(coreY + 0.04 * s, -coreR * 0.85, 3 + Math.floor(R2() * 2), 0.22 * s);
+
+    for (var j = 0; j < 8; j++) {
+      var a2 = (j / 8) * Math.PI * 2 + (R2() - 0.5) * 0.3;
+      addTendril(a2, baseRadius * 1.05, (0.50 + R2() * 0.45) * s, 0.045 * s, j * (Math.PI / 4));
     }
 
   } else if (type === 2) {
-    // ---- ゴキブリ (Cockroach) ----
-    var matR  = matStd(colMain, 0.18, 0.0);
-    var matRL = matStd(colDark, 0.25, 0.0);
-    // Pronotum
-    var pron = mkMesh(new THREE.BoxGeometry(0.26*s,0.10*s,0.22*s),matRL.clone());
-    pron.position.set(0,0.11*s,-0.1*s); g.add(pron);
-    // Abdomen
-    var abd2 = mkMesh(new THREE.BoxGeometry(0.34*s,0.12*s,0.44*s),matR.clone());
-    abd2.position.set(0,0.09*s,0.26*s); g.add(abd2);
-    // Forewing ridges
-    [-1,1].forEach(function(side){
-      var fw=mkMesh(new THREE.BoxGeometry(0.14*s,0.04*s,0.55*s),matRL.clone());
-      fw.position.set(side*0.14*s,0.14*s,0.12*s); fw.rotation.z=side*0.08; g.add(fw);
-    });
-    // Head
-    var hd3=mkMesh(new THREE.BoxGeometry(0.16*s,0.10*s,0.22*s),matR.clone());
-    hd3.position.set(0,0.13*s,-0.37*s); g.add(hd3);
-    // Eyes — dark polished spheres
-    var eyeR = eyeMatGlow.clone();
-    [-0.08*s,0.08*s].forEach(function(ex){
-      var e=mkMesh(new THREE.SphereGeometry(0.032*s,8,6),eyeR);
-      e.position.set(ex,0.17*s,-0.43*s); g.add(e); eyeMeshes.push(e);
-    });
-    // Long antennae (2 segments each)
-    for (var ai3=0;ai3<2;ai3++){
-      var sgn=ai3===0?-1:1;
-      var a1=mkMesh(new THREE.BoxGeometry(0.007*s,0.58*s,0.004*s),matRL.clone());
-      a1.rotation.z=sgn*0.28; a1.rotation.x=-0.32; a1.position.set(sgn*0.075*s,0.17*s,-0.52*s); g.add(a1);
-      var a2=mkMesh(new THREE.BoxGeometry(0.004*s,0.48*s,0.002*s),matRL.clone());
-      a2.rotation.z=sgn*0.5; a2.rotation.x=-0.12; a2.position.set(sgn*0.21*s,0.19*s,-0.72*s); g.add(a2);
+    // Variant C: stacked polyhedra + shard halo + 6 tendrils (longer)
+    var c1 = mkMesh(new THREE.OctahedronGeometry(coreR * 0.9, 0), shellMat.clone());
+    c1.position.y = coreY;
+    c1.rotation.set(R2(), R2(), R2());
+    g.add(c1);
+    var c2 = mkMesh(new THREE.TetrahedronGeometry(coreR * 0.55, 0), darkMat.clone());
+    c2.position.y = coreY + coreR * 0.65;
+    c2.rotation.set(R2(), R2(), R2());
+    g.add(c2);
+
+    var shardN = 10 + Math.floor(R2() * 10);
+    for (var sh = 0; sh < shardN; sh++) {
+      var aa = (sh / shardN) * Math.PI * 2;
+      var rad = coreR * (1.10 + R2() * 0.55);
+      var shard = mkMesh(new THREE.BoxGeometry(coreR * 0.38, coreR * 0.06, coreR * 0.06), accentMat.clone());
+      shard.position.set(Math.cos(aa) * rad, coreY + (R2() - 0.5) * coreR * 0.35, Math.sin(aa) * rad);
+      shard.rotation.y = aa + Math.PI / 2;
+      shard.rotation.x = (R2() - 0.5) * 0.8;
+      g.add(shard);
     }
-    // 6 legs
-    [{z:-0.22*s,l:0.5*s},{z:0.0*s,l:0.55*s},{z:0.20*s,l:0.46*s}].forEach(function(lp,li){
-      [-1,1].forEach(function(side){
-        var lg=new THREE.Group(); lg.position.set(side*0.17*s,0.09*s,lp.z);
-        var up=mkMesh(new THREE.BoxGeometry(0.02*s,lp.l*0.4,0.014*s),matRL.clone());
-        up.rotation.z=side*1.18; up.rotation.x=0.1;
-        up.position.set(side*lp.l*0.15,0,0); lg.add(up);
-        var lo=mkMesh(new THREE.BoxGeometry(0.012*s,lp.l*0.52,0.008*s),matR.clone());
-        lo.rotation.z=side*0.88; lo.rotation.x=0.42;
-        lo.position.set(side*lp.l*0.34,-lp.l*0.11,lp.l*0.07); lg.add(lo);
-        var ft=mkMesh(new THREE.BoxGeometry(0.006*s,lp.l*0.26,0.002*s),matR.clone());
-        ft.rotation.z=side*0.55; ft.rotation.x=0.82;
-        ft.position.set(side*lp.l*0.50,-lp.l*0.26,lp.l*0.17); lg.add(ft);
-        lg.userData.legPhaseOffset=(li*2+(side>0?1:0))*Math.PI/3;
-        legMeshes.push(lg); g.add(lg);
-      });
-    });
+
+    addEyesCluster(coreY + 0.03 * s, -coreR * 0.75, 2, 0.16 * s);
+
+    for (var k = 0; k < 6; k++) {
+      var a3 = (k / 6) * Math.PI * 2 + (R2() - 0.5) * 0.2;
+      addTendril(a3, baseRadius * 0.95, (0.72 + R2() * 0.55) * s, 0.05 * s, k * (Math.PI / 3));
+    }
 
   } else {
-    // ---- サソリ (Scorpion) ----
-    var matSc  = matStd(colMain, 0.18, 0.0);
-    var matScL = matStd(colDark, 0.26, 0.0);
-    var matSting = matStd(colDark, 0.08, 0.5);
-    // Cephalothorax
-    var ceph2=mkMesh(new THREE.BoxGeometry(0.34*s,0.14*s,0.42*s),matSc.clone());
-    ceph2.position.set(0,0.20*s,0.05*s); g.add(ceph2);
-    // Multi-eyes — tiny dark polished spheres
-    var eyeSc = eyeMatGlow.clone();
-    [[-0.06*s,-0.1*s],[0.06*s,-0.1*s],[0,-0.04*s]].forEach(function(ep){
-      var e=mkMesh(new THREE.SphereGeometry(0.028*s,8,6),eyeSc);
-      e.position.set(ep[0],0.36*s,ep[1]); g.add(e); eyeMeshes.push(e);
-    });
-    // Claws
-    [-1,1].forEach(function(side){
-      var arm=mkMesh(new THREE.BoxGeometry(0.045*s,0.36*s,0.05*s),matScL.clone());
-      arm.rotation.z=side*0.75; arm.rotation.x=0.22;
-      arm.position.set(side*0.26*s,0.16*s,-0.37*s); g.add(arm);
-      var clU=mkMesh(new THREE.BoxGeometry(0.055*s,0.05*s,0.22*s),matScL.clone());
-      clU.rotation.z=side*0.55; clU.position.set(side*0.42*s,0.12*s,-0.5*s); g.add(clU);
-      var clL=mkMesh(new THREE.BoxGeometry(0.045*s,0.038*s,0.18*s),matSc.clone());
-      clL.rotation.z=side*0.45; clL.rotation.x=0.3;
-      clL.position.set(side*0.48*s,0.07*s,-0.56*s); g.add(clL);
-    });
-    // Tail (5 segments arching up)
-    var tPos=new THREE.Vector3(0,0.18*s,0.36*s);
-    for (var ti=0;ti<5;ti++){
-      var segF = (1 - ti*0.035);
-      var tSeg=mkMesh(
-        new THREE.BoxGeometry(0.16*s*segF, 0.06*s*segF, 0.14*s*segF),
-        matScL.clone()
-      );
-      tSeg.position.set(0, tPos.y+ti*0.12*s*(1-ti*0.08), tPos.z+ti*0.15*s);
-      tPos.copy(tSeg.position); g.add(tSeg);
+    // Variant D: "crown" ring + central void + 10 tendrils (dense)
+    var crown = mkMesh(new THREE.TorusGeometry(coreR * 1.25, coreR * 0.12, 10, 52), accentMat.clone());
+    crown.position.y = coreY + coreR * 0.15;
+    crown.rotation.x = (R2() - 0.5) * 0.7;
+    crown.rotation.z = (R2() - 0.5) * 0.7;
+    g.add(crown);
+
+    var voidCore = mkMesh(new THREE.SphereGeometry(coreR * 0.62, 12, 10), darkMat.clone());
+    voidCore.position.y = coreY;
+    g.add(voidCore);
+
+    // Small satellites
+    var satN = 4 + Math.floor(R2() * 4);
+    for (var st = 0; st < satN; st++) {
+      var a4 = (st / satN) * Math.PI * 2 + (R2() - 0.5) * 0.4;
+      var sat = mkMesh(new THREE.OctahedronGeometry(coreR * 0.18, 0), shellMat.clone());
+      sat.position.set(Math.cos(a4) * coreR * 1.35, coreY + (R2() - 0.5) * coreR * 0.35, Math.sin(a4) * coreR * 1.35);
+      sat.rotation.set(R2(), R2(), R2());
+      g.add(sat);
     }
-    var stng=mkMesh(new THREE.BoxGeometry(0.02*s,0.26*s,0.01*s),matSting);
-    stng.rotation.x=-0.85; stng.position.set(0,tPos.y+0.14*s,tPos.z+0.12*s); g.add(stng);
-    // 8 legs (4 pairs)
-    [{z:-0.18*s,l:0.50*s},{z:-0.04*s,l:0.54*s},{z:0.10*s,l:0.52*s},{z:0.23*s,l:0.48*s}].forEach(function(lp,li){
-      [-1,1].forEach(function(side){
-        var lg=new THREE.Group(); lg.position.set(side*0.20*s,0.16*s,lp.z);
-        var up=mkMesh(new THREE.BoxGeometry(0.022*s,lp.l*0.42,0.016*s),matScL.clone());
-        up.rotation.z=side*1.08; up.rotation.x=0.14;
-        up.position.set(side*lp.l*0.16,0,0); lg.add(up);
-        var lo=mkMesh(new THREE.BoxGeometry(0.013*s,lp.l*0.5,0.009*s),matSc.clone());
-        lo.rotation.z=side*0.68; lo.rotation.x=0.48;
-        lo.position.set(side*lp.l*0.33,-lp.l*0.14,lp.l*0.09); lg.add(lo);
-        lg.userData.legPhaseOffset=(li*2+(side>0?1:0))*Math.PI/4;
-        legMeshes.push(lg); g.add(lg);
-      });
-    });
+
+    addEyesCluster(coreY + 0.04 * s, -coreR * 0.70, 4 + Math.floor(R2() * 2), 0.26 * s);
+
+    var tendN = 10;
+    for (var t2 = 0; t2 < tendN; t2++) {
+      var a5 = (t2 / tendN) * Math.PI * 2 + (R2() - 0.5) * 0.22;
+      addTendril(a5, baseRadius * 1.10, (0.48 + R2() * 0.40) * s, 0.042 * s, t2 * (Math.PI / 5));
+    }
   }
 
   // Shadow
@@ -2745,7 +2728,7 @@ function buildInsect(R2, forcedType) {
   g.userData.isInsect      = true;
   g.userData.insectType    = type;
   g.userData.insectScale   = s;
-  g.userData.bodyH         = 0.45*s;
+  g.userData.bodyH         = 0.62*s;
   g.userData.phase         = Math.random()*Math.PI*2;
   g.userData.baseY         = 0;
   g.userData.legMeshes     = legMeshes;
@@ -2795,18 +2778,17 @@ function registerInteractable(type, worldX, worldY, worldZ, data, mesh) {
 
 function fireBeam() {
   if (transitioning) return;
-  // Create expanding ring beam
-  var beamGeo = new THREE.TorusGeometry(0.18, 0.04, 8, 32);
+  // Lighter projectile: glowing sphere (cheaper than torus ring)
+  var beamGeo = new THREE.SphereGeometry(0.11, 10, 8);
   var beamMat = new THREE.MeshStandardMaterial({
     color: 0xff2020, emissive: new THREE.Color(0xff0000),
     emissiveIntensity: 4.0, transparent: true, opacity: 0.88
   });
   var beam = new THREE.Mesh(beamGeo, beamMat);
-  // Position at camera, face look direction
+  // Position at camera, along look direction
   var dir = new THREE.Vector3(0, 0, -1);
   dir.applyEuler(camera.rotation);
   beam.position.copy(camera.position).addScaledVector(dir, 0.6);
-  beam.lookAt(camera.position.clone().addScaledVector(dir, 10));
   scene.add(beam);
   // Point light on beam
   var bpl = new THREE.PointLight(0xff2020, 3.0, 4.0, 2.0);
@@ -2832,9 +2814,9 @@ function updateInteractables(dt) {
     b.age += dt;
     b.mesh.position.addScaledVector(b.dir, b.speed);
     b.light.position.copy(b.mesh.position);
-    // Grow radius
-    var scale = 1.0 + b.age * 3.5;
-    b.mesh.scale.set(scale, scale, 1.0);
+    // Grow projectile slightly over time
+    var scale = 1.0 + b.age * 2.4;
+    b.mesh.scale.set(scale, scale, scale);
     b.mesh.material.opacity = Math.max(0, 0.88 - b.age * 0.7);
     b.light.intensity = Math.max(0, 3.0 - b.age * 4.0);
     // Check creature hits
@@ -3891,11 +3873,21 @@ function buildRoom(seed) {
   var R2 = makeRng(seed);
 
   // ---- shape & size selection ----
-  var ALL_SHAPES  = ['rect','rect','rect','hex','cylinder','dome',
-                     'lshape','cross','atrium','cave','brutalist',
-                     'narrow','octagon','vault'];
+  // Open, modern / spacey room shapes.
+  // (Exclude lshape/cross/narrow to avoid cramped clutter.)
+  var ALL_SHAPES  = [
+    'rect','rect','rect',
+    'hex','hex',
+    'cylinder','dome',
+    'atrium','atrium',
+    'brutalist',
+    'octagon','octagon',
+    'vault',
+    'cave'
+  ];
   var MEGA_SHAPES = ['rect','hex','cylinder','dome','brutalist','atrium'];
-  var isMega = R2() > 0.82;
+  // Bias toward larger rooms (mega rooms also spawn fewer exhibits).
+  var isMega = R2() > 0.72;
   var shapeType = isMega
     ? MEGA_SHAPES[Math.floor(R2() * MEGA_SHAPES.length)]
     : ALL_SHAPES[Math.floor(R2() * ALL_SHAPES.length)];
