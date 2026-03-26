@@ -2062,6 +2062,230 @@ function buildCreature(R2) {
 }
 
 // ============================================================
+//  INSECT CREATURES
+// ============================================================
+function buildInsect(R2, forcedType) {
+  var g = new THREE.Group();
+  var type = (forcedType !== undefined) ? forcedType : Math.floor(R2() * 4);
+  var s = 0.55 + R2() * 0.45;
+  var legMeshes = [];
+
+  // Object-like unrealistic colour palette (white/off-white/pale/ceramic/marble)
+  var OBJ_COLS = [
+    0xf8f4ee, // warm white
+    0xfafafa, // pure white
+    0xe8e4dc, // off-white
+    0xd4d0cc, // pale grey
+    0xc8c4c0, // cool grey
+    0xf0ece4, // ivory
+    0xe4dcd4, // linen
+    0x0c0c0a, // near-black
+    0x1a1816  // dark charcoal
+  ];
+  function rndObjCol() { return OBJ_COLS[Math.floor(R2() * OBJ_COLS.length)]; }
+  var colMain = rndObjCol();
+  var colDark = R2() > 0.5 ? 0x0c0c0a : OBJ_COLS[Math.floor(R2()*(OBJ_COLS.length-2)+2)];
+
+  if (type === 0) {
+    // ---- バッタ (Grasshopper) ----
+    var mat   = matStd(colMain, 0.22, 0.0);
+    var matDk = matStd(colDark, 0.30, 0.0);
+    // Body
+    var body = mkMesh(new THREE.BoxGeometry(0.28*s, 0.22*s, 0.75*s), mat);
+    body.position.y = 0.28*s; g.add(body);
+    // Abdomen tip
+    var abd = mkMesh(new THREE.CylinderGeometry(0.02*s, 0.15*s, 0.42*s, 8), mat.clone());
+    abd.rotation.x = -0.15; abd.position.set(0, 0.26*s, 0.5*s); g.add(abd);
+    // Head
+    var head = mkMesh(new THREE.SphereGeometry(0.17*s, 10, 8), mat.clone());
+    head.scale.set(0.9, 0.85, 1.05); head.position.set(0, 0.30*s, -0.48*s); g.add(head);
+    // Eyes
+    var eyeM = new THREE.MeshStandardMaterial({color:0x0c0c0a,emissive:new THREE.Color(0x000000),emissiveIntensity:0,roughness:0.1,metalness:0.6});
+    [-0.08*s,0.08*s].forEach(function(ex){
+      var e = mkMesh(new THREE.SphereGeometry(0.05*s,8,6),eyeM); e.position.set(ex,0.36*s,-0.6*s); g.add(e);
+    });
+    // Antennae
+    for (var ai=0;ai<2;ai++){
+      var sign=ai===0?-1:1;
+      var ant=mkMesh(new THREE.CylinderGeometry(0.008*s,0.004*s,0.52*s,6),matDk.clone());
+      ant.rotation.z=sign*0.35; ant.rotation.x=-0.55;
+      ant.position.set(sign*0.07*s,0.44*s,-0.62*s); g.add(ant);
+    }
+    // Legs: 3 pairs (last pair = long hind legs)
+    var legDefs=[{z:-0.28*s,len:0.32*s,hind:false},{z:0.0*s,len:0.36*s,hind:false},{z:0.22*s,len:0.68*s,hind:true}];
+    legDefs.forEach(function(ld,li){
+      [-1,1].forEach(function(side){
+        var lg=new THREE.Group(); lg.position.set(side*0.14*s,0.26*s,ld.z);
+        var up=mkMesh(new THREE.CylinderGeometry(0.02*s,0.015*s,ld.len*0.44,6),mat.clone());
+        up.rotation.z=side*(ld.hind?0.55:0.42); up.rotation.x=ld.hind?0.45:0.18;
+        up.position.set(side*ld.len*0.17,-ld.len*0.08,ld.hind?-ld.len*0.08:0); lg.add(up);
+        var lo=mkMesh(new THREE.CylinderGeometry(0.015*s,0.01*s,ld.len*0.52,6),matDk.clone());
+        lo.rotation.z=side*(ld.hind?0.18:0.58); lo.rotation.x=ld.hind?-0.55:0.48;
+        lo.position.set(side*ld.len*0.36,-ld.len*0.32,ld.hind?ld.len*0.16:ld.len*0.08); lg.add(lo);
+        lg.userData.legPhaseOffset=(li*2+(side>0?1:0))*Math.PI/3;
+        legMeshes.push(lg); g.add(lg);
+      });
+    });
+
+  } else if (type === 1) {
+    // ---- イモムシ (Caterpillar) ----
+    var segCount = 8 + Math.floor(R2()*4);
+    var segR = 0.17*s;
+    var cSeg  = colMain;
+    var matS  = matStd(cSeg,   0.20, 0.0);
+    var matS2 = matStd(colDark, 0.28, 0.0);
+    var step  = segR * 1.55;
+    var span  = (segCount - 1) * step;
+    for (var si=0;si<segCount;si++){
+      var sr = si===0 ? segR*1.05 : (si===segCount-1 ? segR*0.72 : segR*(0.88+R2()*0.22));
+      var seg = mkMesh(new THREE.SphereGeometry(sr,10,8), si%2===0?matS.clone():matS2.clone());
+      seg.scale.set(1.0,0.82,1.0); seg.position.set(0,sr*0.68,-si*step+span*0.5); g.add(seg);
+    }
+    // Head
+    var hd2 = mkMesh(new THREE.SphereGeometry(segR*1.18,10,8), matS.clone());
+    hd2.position.set(0,segR*0.82, span*0.5+segR*0.88); g.add(hd2);
+    var eyeM2=new THREE.MeshStandardMaterial({color:0x0c0c0a,roughness:0.05,metalness:0.8});
+    [-0.065*s,0.065*s].forEach(function(ex){
+      var e=mkMesh(new THREE.SphereGeometry(0.038*s,8,6),eyeM2); e.position.set(ex,segR*1.1,span*0.5+segR*1.18); g.add(e);
+    });
+    // Stubby legs along body
+    var pairN = Math.floor(segCount*0.7);
+    for (var pi=0;pi<pairN;pi++){
+      [-1,1].forEach(function(side){
+        var lg=new THREE.Group();
+        var lz = pi*(span/pairN) - span*0.45;
+        lg.position.set(side*segR*0.88,segR*0.45,lz);
+        var stub=mkMesh(new THREE.CylinderGeometry(0.018*s,0.024*s,0.2*s,6),matS2.clone());
+        stub.rotation.z=side*0.72; lg.add(stub);
+        lg.userData.legPhaseOffset=pi*Math.PI/(pairN*0.5)+(side>0?Math.PI:0);
+        legMeshes.push(lg); g.add(lg);
+      });
+    }
+
+  } else if (type === 2) {
+    // ---- ゴキブリ (Cockroach) ----
+    var matR  = matStd(colMain, 0.18, 0.0);
+    var matRL = matStd(colDark, 0.25, 0.0);
+    // Pronotum
+    var pron = mkMesh(new THREE.SphereGeometry(0.22*s,12,8),matRL.clone());
+    pron.scale.set(1.12,0.38,0.85); pron.position.set(0,0.11*s,-0.1*s); g.add(pron);
+    // Abdomen
+    var abd2 = mkMesh(new THREE.SphereGeometry(0.30*s,12,8),matR.clone());
+    abd2.scale.set(1.05,0.36,1.22); abd2.position.set(0,0.09*s,0.26*s); g.add(abd2);
+    // Forewing ridges
+    [-1,1].forEach(function(side){
+      var fw=mkMesh(new THREE.BoxGeometry(0.14*s,0.04*s,0.55*s),matRL.clone());
+      fw.position.set(side*0.14*s,0.14*s,0.12*s); fw.rotation.z=side*0.08; g.add(fw);
+    });
+    // Head
+    var hd3=mkMesh(new THREE.SphereGeometry(0.13*s,10,8),matR.clone());
+    hd3.scale.set(0.88,0.65,0.88); hd3.position.set(0,0.13*s,-0.37*s); g.add(hd3);
+    // Eyes — dark polished spheres
+    var eyeR=new THREE.MeshStandardMaterial({color:0x080808,roughness:0.04,metalness:0.7});
+    [-0.08*s,0.08*s].forEach(function(ex){
+      var e=mkMesh(new THREE.SphereGeometry(0.032*s,8,6),eyeR); e.position.set(ex,0.17*s,-0.43*s); g.add(e);
+    });
+    // Long antennae (2 segments each)
+    for (var ai3=0;ai3<2;ai3++){
+      var sgn=ai3===0?-1:1;
+      var a1=mkMesh(new THREE.CylinderGeometry(0.007*s,0.005*s,0.58*s,6),matRL.clone());
+      a1.rotation.z=sgn*0.28; a1.rotation.x=-0.32; a1.position.set(sgn*0.075*s,0.17*s,-0.52*s); g.add(a1);
+      var a2=mkMesh(new THREE.CylinderGeometry(0.004*s,0.002*s,0.48*s,6),matRL.clone());
+      a2.rotation.z=sgn*0.5; a2.rotation.x=-0.12; a2.position.set(sgn*0.21*s,0.19*s,-0.72*s); g.add(a2);
+    }
+    // 6 legs
+    [{z:-0.22*s,l:0.5*s},{z:0.0*s,l:0.55*s},{z:0.20*s,l:0.46*s}].forEach(function(lp,li){
+      [-1,1].forEach(function(side){
+        var lg=new THREE.Group(); lg.position.set(side*0.17*s,0.09*s,lp.z);
+        var up=mkMesh(new THREE.CylinderGeometry(0.02*s,0.014*s,lp.l*0.4,6),matRL.clone());
+        up.rotation.z=side*1.18; up.rotation.x=0.1;
+        up.position.set(side*lp.l*0.15,0,0); lg.add(up);
+        var lo=mkMesh(new THREE.CylinderGeometry(0.012*s,0.008*s,lp.l*0.52,6),matR.clone());
+        lo.rotation.z=side*0.88; lo.rotation.x=0.42;
+        lo.position.set(side*lp.l*0.34,-lp.l*0.11,lp.l*0.07); lg.add(lo);
+        var ft=mkMesh(new THREE.CylinderGeometry(0.006*s,0.002*s,lp.l*0.26,6),matR.clone());
+        ft.rotation.z=side*0.55; ft.rotation.x=0.82;
+        ft.position.set(side*lp.l*0.50,-lp.l*0.26,lp.l*0.17); lg.add(ft);
+        lg.userData.legPhaseOffset=(li*2+(side>0?1:0))*Math.PI/3;
+        legMeshes.push(lg); g.add(lg);
+      });
+    });
+
+  } else {
+    // ---- サソリ (Scorpion) ----
+    var matSc  = matStd(colMain, 0.18, 0.0);
+    var matScL = matStd(colDark, 0.26, 0.0);
+    var matSting = matStd(colDark, 0.08, 0.5);
+    // Cephalothorax
+    var ceph2=mkMesh(new THREE.SphereGeometry(0.28*s,12,8),matSc.clone());
+    ceph2.scale.set(1.1,0.62,1.28); ceph2.position.set(0,0.20*s,0.05*s); g.add(ceph2);
+    // Multi-eyes — tiny dark polished spheres
+    var eyeSc=new THREE.MeshStandardMaterial({color:0x080808,roughness:0.04,metalness:0.8});
+    [[-0.06*s,-0.1*s],[0.06*s,-0.1*s],[0,-0.04*s]].forEach(function(ep){
+      var e=mkMesh(new THREE.SphereGeometry(0.028*s,8,6),eyeSc); e.position.set(ep[0],0.36*s,ep[1]); g.add(e);
+    });
+    // Claws
+    [-1,1].forEach(function(side){
+      var arm=mkMesh(new THREE.CylinderGeometry(0.038*s,0.052*s,0.36*s,8),matScL.clone());
+      arm.rotation.z=side*0.75; arm.rotation.x=0.22;
+      arm.position.set(side*0.26*s,0.16*s,-0.37*s); g.add(arm);
+      var clU=mkMesh(new THREE.BoxGeometry(0.055*s,0.05*s,0.22*s),matScL.clone());
+      clU.rotation.z=side*0.55; clU.position.set(side*0.42*s,0.12*s,-0.5*s); g.add(clU);
+      var clL=mkMesh(new THREE.BoxGeometry(0.045*s,0.038*s,0.18*s),matSc.clone());
+      clL.rotation.z=side*0.45; clL.rotation.x=0.3;
+      clL.position.set(side*0.48*s,0.07*s,-0.56*s); g.add(clL);
+    });
+    // Tail (5 segments arching up)
+    var tPos=new THREE.Vector3(0,0.18*s,0.36*s);
+    for (var ti=0;ti<5;ti++){
+      var tSeg=mkMesh(new THREE.SphereGeometry(0.11*s*(1-ti*0.035),10,8),matScL.clone());
+      tSeg.scale.set(0.78,0.72,1.0);
+      tSeg.position.set(0, tPos.y+ti*0.12*s*(1-ti*0.08), tPos.z+ti*0.15*s);
+      tPos.copy(tSeg.position); g.add(tSeg);
+    }
+    var stng=mkMesh(new THREE.CylinderGeometry(0,0.055*s,0.26*s,8),matSting);
+    stng.rotation.x=-0.85; stng.position.set(0,tPos.y+0.14*s,tPos.z+0.12*s); g.add(stng);
+    // 8 legs (4 pairs)
+    [{z:-0.18*s,l:0.50*s},{z:-0.04*s,l:0.54*s},{z:0.10*s,l:0.52*s},{z:0.23*s,l:0.48*s}].forEach(function(lp,li){
+      [-1,1].forEach(function(side){
+        var lg=new THREE.Group(); lg.position.set(side*0.20*s,0.16*s,lp.z);
+        var up=mkMesh(new THREE.CylinderGeometry(0.022*s,0.016*s,lp.l*0.42,6),matScL.clone());
+        up.rotation.z=side*1.08; up.rotation.x=0.14;
+        up.position.set(side*lp.l*0.16,0,0); lg.add(up);
+        var lo=mkMesh(new THREE.CylinderGeometry(0.013*s,0.009*s,lp.l*0.5,6),matSc.clone());
+        lo.rotation.z=side*0.68; lo.rotation.x=0.48;
+        lo.position.set(side*lp.l*0.33,-lp.l*0.14,lp.l*0.09); lg.add(lo);
+        lg.userData.legPhaseOffset=(li*2+(side>0?1:0))*Math.PI/4;
+        legMeshes.push(lg); g.add(lg);
+      });
+    });
+  }
+
+  // Shadow
+  var shd=mkMesh(new THREE.CircleGeometry(0.48*s,16),
+    new THREE.MeshStandardMaterial({color:0x000000,transparent:true,opacity:0.28,roughness:1,depthWrite:false}));
+  shd.rotation.x=-Math.PI/2; shd.position.y=0.003; g.add(shd);
+
+  // Metadata for animation
+  g.userData.isCreature    = true;
+  g.userData.isInsect      = true;
+  g.userData.insectType    = type;
+  g.userData.insectScale   = s;
+  g.userData.bodyH         = 0.45*s;
+  g.userData.phase         = Math.random()*Math.PI*2;
+  g.userData.baseY         = 0;
+  g.userData.legMeshes     = legMeshes;
+  g.userData.wanderTarget  = new THREE.Vector3(0,0,0);
+  g.userData.wanderSpeed   = 0.014 + Math.random()*0.008;
+  g.userData.alertSpeed    = 0.038 + Math.random()*0.018;
+  g.userData.wanderTimer   = 1.0 + Math.random()*3.0;
+  g.userData.wanderFacing  = 0;
+  g.userData.isAlert       = false;
+
+  return g;
+}
+
+// ============================================================
 //  INTERACTABLE SYSTEM
 // ============================================================
 var roomInteractables = [];  // { type, worldPos, data, mesh, alive }
@@ -2142,7 +2366,8 @@ function updateInteractables(dt) {
       var itc = roomInteractables[ci];
       if (itc.type !== 'creature' || !itc.alive) continue;
       var dist = b.mesh.position.distanceTo(itc.pos);
-      if (dist < 0.9 + scale * 0.5) {
+      var hitRadius = (itc.mesh && itc.mesh.userData.isInsect) ? 1.1 + scale*0.55 : 0.9 + scale*0.5;
+      if (dist < hitRadius) {
         // Hit!
         itc.alive = false;
         if (itc.mesh && itc.mesh.parent) { itc.mesh.parent.remove(itc.mesh); }
@@ -2173,11 +2398,13 @@ function updateInteractables(dt) {
         showMemoText = it.data.text;
       }
     } else if (it.type === 'creature') {
-      if (d < 7.0) {
+      var aimRange = (it.mesh && it.mesh.userData.isInsect) ? 9.0 : 7.0;
+      var shootRange = (it.mesh && it.mesh.userData.isInsect) ? 8.0 : 6.0;
+      if (d < aimRange) {
         // Check if aimed at creature (project to screen)
         var cp = it.pos.clone().project(camera);
         var screenDist = Math.sqrt(cp.x*cp.x + cp.y*cp.y);
-        if (screenDist < 0.25 && cp.z < 1.0 && d < 6.0) {
+        if (screenDist < 0.28 && cp.z < 1.0 && d < shootRange) {
           showShoot = true;
         }
       }
@@ -2192,6 +2419,60 @@ function updateInteractables(dt) {
           ud.eyePl.intensity = 1.2 + Math.sin(ud.phase * 3.1) * 0.4;
         }
 
+        // ---- Insect-specific: leg scurry animation + player reaction ----
+        if (ud.isInsect) {
+          // Leg animation (カサカサ)
+          var lms = ud.legMeshes;
+          if (lms) {
+            var spd = ud.isAlert ? 9.5 : 5.8;
+            var amp = ud.isAlert ? 0.32 : 0.22;
+            for (var lii = 0; lii < lms.length; lii++) {
+              var lm = lms[lii];
+              var lph = ud.phase * spd + lm.userData.legPhaseOffset;
+              lm.rotation.x = Math.sin(lph) * amp;
+            }
+          }
+          // Player proximity reaction
+          var dToPlayer = it.mesh.position.distanceTo(camPos);
+          if (dToPlayer < 8.0) {
+            ud.isAlert = true;
+            // Face toward/away from player
+            var dxP = camPos.x - it.mesh.position.x;
+            var dzP = camPos.z - it.mesh.position.z;
+            if (dToPlayer < 5.0) {
+              // Run away
+              var awayLen = Math.sqrt(dxP*dxP + dzP*dzP);
+              if (awayLen > 0.01) {
+                var aspd = ud.alertSpeed || 0.04;
+                it.mesh.position.x -= (dxP/awayLen) * aspd;
+                it.mesh.position.z -= (dzP/awayLen) * aspd;
+                // Clamp inside room
+                if (currentRoom) {
+                  it.mesh.position.x = Math.max(-currentRoom.hw+0.5, Math.min(currentRoom.hw-0.5, it.mesh.position.x));
+                  it.mesh.position.z = Math.max(-currentRoom.hd+0.5, Math.min(currentRoom.hd-0.5, it.mesh.position.z));
+                }
+                it.pos.set(it.mesh.position.x, it.pos.y, it.mesh.position.z);
+              }
+              // Face away from player
+              var awayFacing = Math.atan2(-dxP, -dzP);
+              var dfA = awayFacing - it.mesh.rotation.y;
+              while (dfA >  Math.PI) dfA -= Math.PI*2;
+              while (dfA < -Math.PI) dfA += Math.PI*2;
+              it.mesh.rotation.y += dfA * Math.min(1.0, dt*4.5);
+            } else {
+              // Just turn to face player (watching)
+              var watchFacing = Math.atan2(dxP, dzP);
+              var dfW = watchFacing - it.mesh.rotation.y;
+              while (dfW >  Math.PI) dfW -= Math.PI*2;
+              while (dfW < -Math.PI) dfW += Math.PI*2;
+              it.mesh.rotation.y += dfW * Math.min(1.0, dt*2.0);
+            }
+          } else {
+            ud.isAlert = false;
+          }
+          // no stinger glow
+        }
+
         // Wander toward target
         ud.wanderTimer -= dt;
         if (ud.wanderTimer <= 0) {
@@ -2203,25 +2484,29 @@ function updateInteractables(dt) {
             0,
             (Math.random() - 0.5) * 2 * rwHD
           );
-          ud.wanderTimer = 10.0 + Math.random() * 16.0;
+          ud.wanderTimer = (ud.isInsect ? 5.0 : 10.0) + Math.random() * (ud.isInsect ? 10.0 : 16.0);
         }
 
-        var wdx = ud.wanderTarget.x - it.mesh.position.x;
-        var wdz = ud.wanderTarget.z - it.mesh.position.z;
-        var wdist = Math.sqrt(wdx * wdx + wdz * wdz);
-        if (wdist > 0.15) {
-          var sp = ud.wanderSpeed || 0.01;
-          it.mesh.position.x += (wdx / wdist) * sp;
-          it.mesh.position.z += (wdz / wdist) * sp;
-          // Smoothly face movement direction
-          var targetFacing = Math.atan2(wdx, wdz);
-          var df = targetFacing - it.mesh.rotation.y;
-          // wrap to [-PI, PI]
-          while (df >  Math.PI) df -= Math.PI * 2;
-          while (df < -Math.PI) df += Math.PI * 2;
-          it.mesh.rotation.y += df * Math.min(1.0, dt * 2.5);
-          // Keep registered position in sync
-          it.pos.set(it.mesh.position.x, it.pos.y, it.mesh.position.z);
+        // Insects only wander when not alert (not fleeing player)
+        var canWander = !ud.isInsect || !ud.isAlert || it.mesh.position.distanceTo(camPos) >= 5.0;
+        if (canWander) {
+          var wdx = ud.wanderTarget.x - it.mesh.position.x;
+          var wdz = ud.wanderTarget.z - it.mesh.position.z;
+          var wdist = Math.sqrt(wdx * wdx + wdz * wdz);
+          if (wdist > 0.15) {
+            var sp = ud.wanderSpeed || 0.01;
+            it.mesh.position.x += (wdx / wdist) * sp;
+            it.mesh.position.z += (wdz / wdist) * sp;
+            // Smoothly face movement direction
+            var targetFacing = Math.atan2(wdx, wdz);
+            var df = targetFacing - it.mesh.rotation.y;
+            // wrap to [-PI, PI]
+            while (df >  Math.PI) df -= Math.PI * 2;
+            while (df < -Math.PI) df += Math.PI * 2;
+            it.mesh.rotation.y += df * Math.min(1.0, dt * 2.5);
+            // Keep registered position in sync
+            it.pos.set(it.mesh.position.x, it.pos.y, it.mesh.position.z);
+          }
         }
       }
     }
@@ -3393,6 +3678,26 @@ function buildRoom(seed) {
     grp.add(crMesh);
     interactables.push({ type:'creature', lx:crX, ly:0.8, lz:crZ, data:{}, mesh:crMesh });
   }
+  // Insects: 55% chance, 1-3 insects per room
+  if (R2() < 0.55) {
+    var insectCount = 1 + Math.floor(R2() * 3);
+    var insectTypes = [0,1,2,3];
+    // Shuffle types so we can pick without duplication
+    for (var is2=insectTypes.length-1;is2>0;is2--){var is3=Math.floor(R2()*(is2+1));var ist=insectTypes[is2];insectTypes[is2]=insectTypes[is3];insectTypes[is3]=ist;}
+    for (var ii=0; ii<insectCount; ii++) {
+      var insType = insectTypes[ii % insectTypes.length];
+      var insMesh = buildInsect(R2, insType);
+      var insX = (R2()-0.5)*Math.max(2, W-4);
+      var insZ = (R2()-0.5)*Math.max(2, D-4);
+      insMesh.position.set(insX, 0, insZ);
+      insMesh.rotation.y = R2()*Math.PI*2;
+      insMesh.userData.baseY = 0;
+      insMesh.userData.wanderTarget.set(insX, 0, insZ);
+      insMesh.userData.wanderTimer = 0.5 + Math.random() * 2.0;
+      grp.add(insMesh);
+      interactables.push({ type:'creature', lx:insX, ly:0.35, lz:insZ, data:{insect:true}, mesh:insMesh });
+    }
+  }
 
   // ---- door trigger data ----
   var doors = [{ wall:'front', dx:frontDX, dz:0, seed:Math.floor(R2()*99991)+1 }];
@@ -3600,7 +3905,8 @@ if (!isMobile) {
         if (it.type !== 'creature' || !it.alive) continue;
         var cp = it.pos.clone().project(camera);
         var sd = Math.sqrt(cp.x * cp.x + cp.y * cp.y);
-        if (sd < 0.25 && cp.z < 1.0 && camera.position.distanceTo(it.pos) < 6.0) {
+        var sRange = (it.mesh && it.mesh.userData.isInsect) ? 8.0 : 6.0;
+        if (sd < 0.28 && cp.z < 1.0 && camera.position.distanceTo(it.pos) < sRange) {
           aimed = true; break;
         }
       }
