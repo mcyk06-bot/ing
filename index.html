@@ -184,11 +184,11 @@ canvas.locked{cursor:none}
 <canvas id="canvas"></canvas>
 <div id="room-info">ROOM 001</div>
 <div id="door-hint">— EXIT —</div>
-<div id="pc-hint">CLICK TO ENTER</div>
+<div id="pc-hint">CLICK TO ENTER &nbsp;|&nbsp; TAB : CURSOR &nbsp;|&nbsp; N : NEXT</div>
 <div id="stick-zone"><div id="stick-ring"><div id="stick-knob"></div></div></div>
 <div id="look-right"></div>
 <div id="fade"></div>
-<button id="next-room-btn">NEXT ROOM</button>
+<button id="next-room-btn">[N] NEXT ROOM</button>
 <div id="speed-indicator">RUN</div>
 <div id="memo-popup"></div>
 <div id="memo-label">— READ —</div>
@@ -2145,7 +2145,8 @@ function updateInteractables(dt) {
       if (dist < 0.9 + scale * 0.5) {
         // Hit!
         itc.alive = false;
-        scene.remove(itc.mesh);
+        if (itc.mesh && itc.mesh.parent) { itc.mesh.parent.remove(itc.mesh); }
+        else { scene.remove(itc.mesh); }
         // Flash
         var flash = new THREE.PointLight(0xff4400, 8.0, 5.0, 2.0);
         flash.position.copy(itc.pos);
@@ -3248,7 +3249,8 @@ function buildRoom(seed) {
   // ---- door glows ----
   // For dome: sphere wall curves inward with height, so sign needs extra inset
   // at sign height h: wall_z = -sqrt(R²-h²), inset needed = R - sqrt(R²-h²)
-  var doorInset = 0.08;
+  // Default: must be >= WALL_T/2 (0.09) to avoid embedding into wall geometry
+  var doorInset = WALL_T / 2 + 0.06; // 0.15 — just clear of the inner wall face
   if (shapeType === 'dome') {
     var signH = DOOR_H + 0.45;
     var safeH = Math.min(signH, hw * 0.98);
@@ -3590,7 +3592,23 @@ var pointerLocked = false;
 var keys = { w: false, a: false, s: false, d: false };
 
 if (!isMobile) {
-  canvas.addEventListener('click', function () { canvas.requestPointerLock(); });
+  canvas.addEventListener('click', function () {
+    if (pointerLocked) {
+      var aimed = false;
+      for (var i = 0; i < roomInteractables.length; i++) {
+        var it = roomInteractables[i];
+        if (it.type !== 'creature' || !it.alive) continue;
+        var cp = it.pos.clone().project(camera);
+        var sd = Math.sqrt(cp.x * cp.x + cp.y * cp.y);
+        if (sd < 0.25 && cp.z < 1.0 && camera.position.distanceTo(it.pos) < 6.0) {
+          aimed = true; break;
+        }
+      }
+      if (aimed) fireBeam();
+    } else {
+      canvas.requestPointerLock();
+    }
+  });
   document.addEventListener('pointerlockchange', function () {
     pointerLocked = document.pointerLockElement === canvas;
     canvas.classList.toggle('locked', pointerLocked);
@@ -3611,6 +3629,18 @@ if (!isMobile) {
     if (e.key === 'a' || e.key === 'ArrowLeft')   keys.a = true;
     if (e.key === 'd' || e.key === 'ArrowRight')  keys.d = true;
     if (e.key === 'Escape') document.exitPointerLock();
+    // N key: next room without breaking pointer lock
+    if (e.key === 'n' || e.key === 'N') {
+      if (transitioning) return;
+      var fakeSeed = Math.floor(Math.random() * 99991) + 1;
+      enterDoor({ seed: fakeSeed });
+    }
+    // Tab: toggle cursor mode (release/re-acquire pointer lock)
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      if (pointerLocked) { document.exitPointerLock(); }
+      else               { canvas.requestPointerLock(); }
+    }
   });
   document.addEventListener('keyup', function (e) {
     if (e.key === 'w' || e.key === 'ArrowUp')    keys.w = false;
