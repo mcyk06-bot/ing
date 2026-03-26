@@ -1687,6 +1687,413 @@ function buildOilTimer(R2) {
   return g;
 }
 
+// ------ 巨大スピーカー ------
+function buildGiantSpeaker(R2, H) {
+  var g = new THREE.Group();
+  var w = 1.2 + R2() * 1.7;
+  var h = 1.5 + R2() * 2.2;
+  var d = 0.55 + R2() * 0.85;
+
+  var matCab = matStd(0x0f0f0f, 0.12 + R2() * 0.25, 0.35 + R2() * 0.25);
+  var body = mkMesh(new THREE.BoxGeometry(w, h, d), matCab);
+  body.position.y = h / 2;
+  g.add(body);
+
+  // Front baffle
+  var baffleMat = matStd(0x0a0a0a, 0.75, 0.05);
+  var baffle = mkMesh(new THREE.BoxGeometry(w * 0.94, h * 0.86, 0.02), baffleMat);
+  baffle.position.set(0, h / 2, d / 2 + 0.01);
+  g.add(baffle);
+
+  var neonColors = [0x00ffdd, 0xff0066, 0xffee00, 0x0088ff, 0x00ff88, 0xff4400];
+  var col = neonColors[Math.floor(R2() * neonColors.length)];
+  var neonMat = new THREE.MeshStandardMaterial({
+    color: col,
+    emissive: new THREE.Color(col),
+    emissiveIntensity: 2.6 + R2() * 1.4,
+    roughness: 0.22,
+    metalness: 0.15
+  });
+
+  var wooMat = matStd(0xd8d8d8, 0.16 + R2() * 0.12, 0.25 + R2() * 0.25);
+  var r1 = Math.min(w, h) * (0.16 + R2() * 0.05);
+  var r2 = r1 * (0.92 + R2() * 0.06);
+
+  function addWoofer(cy, r, makeNeonRing) {
+    var face = mkMesh(new THREE.CircleGeometry(r, 32), wooMat);
+    face.position.set(0, cy, d / 2 + 0.012);
+    g.add(face);
+    if (makeNeonRing) {
+      var ring = mkMesh(new THREE.RingGeometry(r * 0.55, r * 0.95, 48), neonMat.clone());
+      ring.position.set(0, cy, d / 2 + 0.013);
+      g.add(ring);
+      var pl = new THREE.PointLight(col, 0.9 + R2() * 0.9, 3.5 + R2() * 1.5, 2.0);
+      pl.position.set(0, cy, d / 2 + 0.18);
+      g.add(pl);
+    }
+  }
+
+  addWoofer(h * 0.62, r1, true);
+  addWoofer(h * 0.30, r2, false);
+
+  // Simple feet
+  var footMat = matStd(0x111111, 0.25, 0.65);
+  [[-w*0.35, d*0.28], [w*0.35, d*0.28], [-w*0.35, -d*0.28], [w*0.35, -d*0.28]].forEach(function(p) {
+    var ft = mkMesh(new THREE.BoxGeometry(w * 0.12, 0.08, d * 0.12), footMat.clone());
+    ft.position.set(p[0], 0.04, p[1]);
+    g.add(ft);
+  });
+
+  // Shadow
+  var shd = mkMesh(
+    new THREE.CircleGeometry(Math.max(w, d) * 0.55, 20),
+    new THREE.MeshStandardMaterial({ color: 0x000000, transparent: true, opacity: 0.18, roughness: 1, depthWrite: false })
+  );
+  shd.rotation.x = -Math.PI / 2;
+  shd.position.y = 0.003;
+  g.add(shd);
+  return g;
+}
+
+// ------ 変電装置 / Transformer ------
+function buildSubstationTransformer(R2, H) {
+  var g = new THREE.Group();
+  var w = 1.0 + R2() * 1.3;
+  var d = 0.75 + R2() * 0.8;
+  var h = 2.0 + R2() * 2.5;
+
+  var baseMat = matStd(0x151515, 0.12 + R2() * 0.25, 0.2 + R2() * 0.3);
+  var platform = mkMesh(new THREE.BoxGeometry(w * 1.05, 0.08, d * 1.05), baseMat);
+  platform.position.y = 0.04;
+  g.add(platform);
+
+  var bodyMat = matStd(0x0f0f0f, 0.18 + R2() * 0.22, 0.25 + R2() * 0.2);
+  var tank = mkMesh(new THREE.BoxGeometry(w * 0.58, h * 0.42, d * 0.42), bodyMat);
+  tank.position.y = h * 0.38;
+  g.add(tank);
+
+  var coreMat = matStd(0x2a2a2a, 0.06 + R2() * 0.12, 0.7);
+  var coreW = w * 0.18;
+  var coilR = Math.min(w, d) * (0.18 + R2() * 0.12);
+  // Two coil rings (stylized)
+  for (var i = 0; i < 2; i++) {
+    var tor = mkMesh(new THREE.TorusGeometry(coilR, w * 0.02, 10, 40), coreMat.clone());
+    tor.rotation.x = Math.PI / 2;
+    tor.position.set((i === 0 ? -coreW : coreW), h * 0.40 + (i === 0 ? 0.06 : -0.04), 0);
+    g.add(tor);
+  }
+
+  // Insulator fins
+  var finMat = matStd(0x3a3a3a, 0.08, 0.3);
+  for (var fi = 0; fi < 5; fi++) {
+    var fin = mkMesh(new THREE.BoxGeometry(w * 0.04, h * 0.26, d * 0.02), finMat.clone());
+    fin.position.set(0, h * 0.50, -d * 0.10 + fi * d * 0.04);
+    g.add(fin);
+  }
+
+  // Control light
+  var col = [0x00ffdd, 0xff0066, 0xffee00, 0x0088ff][Math.floor(R2() * 4)];
+  var ledMat = new THREE.MeshStandardMaterial({ color: col, emissive: new THREE.Color(col), emissiveIntensity: 3.2, roughness: 0.25, metalness: 0.1 });
+  var led = mkMesh(new THREE.SphereGeometry(0.05 + R2() * 0.03, 12, 8), ledMat);
+  led.position.set(w * 0.18, h * 0.78, d * 0.12);
+  g.add(led);
+  var pl = new THREE.PointLight(col, 1.4, 4.0 + R2() * 2.0, 2.0);
+  pl.position.copy(led.position);
+  g.add(pl);
+
+  var shd = mkMesh(
+    new THREE.CircleGeometry(Math.max(w, d) * 0.75, 20),
+    new THREE.MeshStandardMaterial({ color: 0x000000, transparent: true, opacity: 0.15, roughness: 1, depthWrite: false })
+  );
+  shd.rotation.x = -Math.PI / 2;
+  shd.position.y = 0.003;
+  g.add(shd);
+  return g;
+}
+
+// ------ DJブース ------
+function buildDJBooth(R2, H) {
+  var g = new THREE.Group();
+  var w = 1.3 + R2() * 1.4;
+  var d = 0.7 + R2() * 0.7;
+  var tableH = 0.25 + R2() * 0.20;
+  var panelH = 1.0 + R2() * 0.9;
+
+  var topMat = matStd(0x111111, 0.22 + R2() * 0.20, 0.75);
+  var top = mkMesh(new THREE.BoxGeometry(w, tableH, d), topMat);
+  top.position.y = tableH / 2;
+  g.add(top);
+
+  var panelMat = matStd(0x0c0c0c, 0.25, 0.45);
+  var panel = mkMesh(new THREE.BoxGeometry(w * 0.93, panelH, d * 0.08), panelMat);
+  panel.position.set(0, panelH / 2 + tableH, -d / 2 + d * 0.04);
+  g.add(panel);
+
+  // Deck discs
+  var discMat = matStd(0x222222, 0.08, 0.6);
+  var discR = Math.min(w, d) * (0.17 + R2() * 0.05);
+  var discY = tableH + 0.55;
+
+  function deckAt(cx) {
+    var disc = mkMesh(new THREE.CylinderGeometry(discR, discR, 0.035, 28), discMat.clone());
+    disc.position.set(cx, discY, d * 0.02);
+    // Keep the deck surface horizontal (disk faces up).
+    disc.rotation.x = 0;
+    g.add(disc);
+    var ringMat = new THREE.MeshStandardMaterial({
+      color: 0x00ffdd,
+      emissive: new THREE.Color(0x00ffdd),
+      emissiveIntensity: 1.8,
+      roughness: 0.22,
+      metalness: 0.15
+    });
+    var ring = mkMesh(new THREE.RingGeometry(discR * 0.62, discR * 0.97, 48), ringMat);
+    ring.position.set(cx, discY, d * 0.028);
+    ring.rotation.x = Math.PI / 2;
+    g.add(ring);
+  }
+
+  deckAt(-w * 0.22);
+  deckAt(w * 0.22);
+
+  // Mixer knobs
+  var knobMat = matStd(0x3a3a3a, 0.12, 0.8);
+  var knobCount = 10 + Math.floor(R2() * 8);
+  for (var i = 0; i < knobCount; i++) {
+    var kx = (R2() - 0.5) * w * 0.46;
+    var ky = tableH + 0.28 + R2() * 0.20;
+    var kz = d * (0.08 + R2() * 0.10);
+    var knob = mkMesh(new THREE.CylinderGeometry(0.02, 0.03, 0.05, 10), knobMat.clone());
+    knob.position.set(kx, ky, kz);
+    g.add(knob);
+    if (R2() > 0.55) {
+      var ledCol = [0xff0066, 0x00ffdd, 0xffee00, 0x0088ff][Math.floor(R2() * 4)];
+      var led = mkMesh(new THREE.SphereGeometry(0.018, 10, 8), new THREE.MeshStandardMaterial({
+        color: ledCol,
+        emissive: new THREE.Color(ledCol),
+        emissiveIntensity: 2.4,
+        roughness: 0.25,
+        metalness: 0.08
+      }));
+      led.position.set(kx, ky + 0.05, kz + 0.01);
+      g.add(led);
+      var pl = new THREE.PointLight(ledCol, 0.55, 2.6, 1.8);
+      pl.position.copy(led.position);
+      g.add(pl);
+    }
+  }
+
+  // Neon strip on panel
+  var stripCol = [0xff0066, 0x00ffdd, 0xffee00, 0x0088ff][Math.floor(R2() * 4)];
+  var stripMat = new THREE.MeshStandardMaterial({
+    color: stripCol,
+    emissive: new THREE.Color(stripCol),
+    emissiveIntensity: 3.0,
+    roughness: 0.2,
+    metalness: 0.1
+  });
+  var strip = mkMesh(new THREE.BoxGeometry(w * 0.55, 0.02, d * 0.03), stripMat);
+  strip.position.set(0, tableH + 0.85, -d/2 + d * 0.06);
+  g.add(strip);
+  var pl2 = new THREE.PointLight(stripCol, 1.0, 4.0, 2.0);
+  pl2.position.set(0, tableH + 0.85, -d/2 + d * 0.02);
+  g.add(pl2);
+
+  var shd = mkMesh(
+    new THREE.CircleGeometry(Math.max(w, d) * 0.65, 20),
+    new THREE.MeshStandardMaterial({ color: 0x000000, transparent: true, opacity: 0.16, roughness: 1, depthWrite: false })
+  );
+  shd.rotation.x = -Math.PI / 2;
+  shd.position.y = 0.003;
+  g.add(shd);
+
+  return g;
+}
+
+// ------ アナログシンセ（コントローラ系） ------
+function buildAnalogSynth(R2, H) {
+  var g = new THREE.Group();
+  var w = 1.2 + R2() * 1.4;
+  var d = 0.55 + R2() * 0.65;
+  var baseH = 0.28 + R2() * 0.22;
+  var panelH = 0.55 + R2() * 0.6;
+
+  var baseMat = matStd(0x0f0f0f, 0.20, 0.55);
+  var base = mkMesh(new THREE.BoxGeometry(w, baseH, d), baseMat);
+  base.position.y = baseH / 2;
+  g.add(base);
+
+  var panelMat = matStd(0x111111, 0.35, 0.2);
+  var panel = mkMesh(new THREE.BoxGeometry(w * 0.95, panelH, d * 0.10), panelMat);
+  panel.position.set(0, baseH + panelH / 2, 0);
+  g.add(panel);
+
+  // Screen (canvas waveform)
+  var cv = document.createElement('canvas');
+  cv.width = 256; cv.height = 96;
+  var cx = cv.getContext('2d');
+  cx.fillStyle = '#041014';
+  cx.fillRect(0, 0, cv.width, cv.height);
+  var waveCol = [0x00ffdd, 0x00aaff, 0xffee00, 0xff33aa][Math.floor(R2() * 4)];
+  cx.strokeStyle = 'rgba(' + ((waveCol>>16)&255) + ',' + ((waveCol>>8)&255) + ',' + (waveCol&255) + ',0.95)';
+  cx.lineWidth = 2;
+  cx.beginPath();
+  for (var i = 0; i < 256; i++) {
+    var t = i / 256;
+    var y = cv.height * 0.52
+      + Math.sin(t * (3 + R2()*4) * Math.PI*2 + R2()*3) * cv.height * (0.12 + R2()*0.08)
+      + Math.sin(t * (1 + R2()*3) * Math.PI*2) * cv.height * 0.05;
+    if (i === 0) cx.moveTo(i, y);
+    else cx.lineTo(i, y);
+  }
+  cx.stroke();
+  // Grid
+  cx.strokeStyle = 'rgba(0,255,210,0.18)';
+  for (var gx = 0; gx < 256; gx += 32) { cx.beginPath(); cx.moveTo(gx,0); cx.lineTo(gx,cv.height); cx.stroke(); }
+  for (var gy = 0; gy < cv.height; gy += 24) { cx.beginPath(); cx.moveTo(0,gy); cx.lineTo(cv.width,gy); cx.stroke(); }
+
+  var screenMat = new THREE.MeshStandardMaterial({
+    map: new THREE.CanvasTexture(cv),
+    emissive: new THREE.Color(waveCol),
+    emissiveIntensity: 1.6,
+    roughness: 0.18,
+    metalness: 0.05
+  });
+  var screen = mkMesh(new THREE.PlaneGeometry(w * 0.26, panelH * 0.42), screenMat);
+  screen.position.set(-w * 0.26, baseH + panelH * 0.08, d / 2 + 0.03);
+  g.add(screen);
+
+  // Knobs
+  var knobMat = matStd(0x333333, 0.18, 0.7);
+  var knobCount = 12 + Math.floor(R2() * 10);
+  for (var k = 0; k < knobCount; k++) {
+    var kx = (R2() - 0.5) * w * 0.72;
+    var ky = baseH + panelH * (0.10 + R2() * 0.72);
+    var kz = d * (0.16 + R2() * 0.08);
+    var knob = mkMesh(new THREE.CylinderGeometry(0.02, 0.03, 0.05, 10), knobMat.clone());
+    knob.position.set(kx, ky, kz);
+    g.add(knob);
+  }
+
+  // LED strips
+  var ledCol = [0xff0066, 0x00ffdd, 0xffee00, 0x0088ff][Math.floor(R2() * 4)];
+  var ledMat = new THREE.MeshStandardMaterial({
+    color: ledCol,
+    emissive: new THREE.Color(ledCol),
+    emissiveIntensity: 2.8,
+    roughness: 0.22,
+    metalness: 0.1
+  });
+  var strip = mkMesh(new THREE.BoxGeometry(w * 0.72, 0.02, d * 0.03), ledMat);
+  strip.position.set(0, baseH + panelH * 0.82, d / 2 + 0.03);
+  g.add(strip);
+  var pl = new THREE.PointLight(ledCol, 1.0, 4.0, 2.0);
+  pl.position.set(0, baseH + panelH * 0.82, d / 2 + 0.10);
+  g.add(pl);
+
+  var shd = mkMesh(
+    new THREE.CircleGeometry(Math.max(w, d) * 0.60, 20),
+    new THREE.MeshStandardMaterial({ color: 0x000000, transparent: true, opacity: 0.14, roughness: 1, depthWrite: false })
+  );
+  shd.rotation.x = -Math.PI / 2;
+  shd.position.y = 0.003;
+  g.add(shd);
+  return g;
+}
+
+// ------ アナログ・イコライザ / LEDバー系 ------
+function buildAnalogEqualizer(R2, H) {
+  var g = new THREE.Group();
+  var w = 0.9 + R2() * 1.2;
+  var d = 0.42 + R2() * 0.55;
+  var h = 1.5 + R2() * 1.8;
+
+  var rackMat = matStd(0x0f0f0f, 0.18, 0.65);
+  var rack = mkMesh(new THREE.BoxGeometry(w, 0.18, d), rackMat);
+  rack.position.set(0, 0.18 / 2, 0);
+  g.add(rack);
+
+  var panelMat = matStd(0x101010, 0.22, 0.2);
+  var panel = mkMesh(new THREE.BoxGeometry(w * 0.72, h, d * 0.16), panelMat);
+  panel.position.y = h / 2;
+  g.add(panel);
+
+  var col = [0x00ffdd, 0xff0066, 0xffee00, 0x0088ff][Math.floor(R2() * 4)];
+  var barMat = new THREE.MeshStandardMaterial({
+    color: col,
+    emissive: new THREE.Color(col),
+    emissiveIntensity: 3.1,
+    roughness: 0.2,
+    metalness: 0.1
+  });
+
+  var barCount = 10 + Math.floor(R2() * 10);
+  for (var i = 0; i < barCount; i++) {
+    var bw = (w * 0.62) / barCount;
+    var bh = h * (0.15 + R2() * 0.80);
+    var bar = mkMesh(new THREE.BoxGeometry(bw * 0.8, bh, d * 0.06), barMat.clone());
+    var x = -w * 0.31 + bw * 0.5 + i * bw;
+    bar.position.set(x, bh / 2, d * 0.06);
+    g.add(bar);
+  }
+
+  var pl = new THREE.PointLight(col, 1.2, 5.0, 2.0);
+  pl.position.set(0, h * 0.65, d * 0.22);
+  g.add(pl);
+
+  var shd = mkMesh(
+    new THREE.CircleGeometry(Math.max(w, d) * 0.55, 20),
+    new THREE.MeshStandardMaterial({ color: 0x000000, transparent: true, opacity: 0.14, roughness: 1, depthWrite: false })
+  );
+  shd.rotation.x = -Math.PI / 2;
+  shd.position.y = 0.003;
+  g.add(shd);
+
+  return g;
+}
+
+// ------ ネオン系彫刻 / Neon sculpture ------
+function buildNeonSculpture(R2, H) {
+  var g = new THREE.Group();
+  var col = [0x00ffdd, 0xff0066, 0xffee00, 0x0088ff, 0xcc00ff, 0x00ff88][Math.floor(R2() * 6)];
+  var neonMat = new THREE.MeshStandardMaterial({
+    color: col,
+    emissive: new THREE.Color(col),
+    emissiveIntensity: 3.6 + R2() * 1.3,
+    roughness: 0.18,
+    metalness: 0.28
+  });
+
+  var radius = 0.45 + R2() * 0.25;
+  var baseY = 0.45 + R2() * 0.25;
+  var n = 6 + Math.floor(R2() * 4);
+  for (var i = 0; i < n; i++) {
+    var a = (i / n) * Math.PI * 2 + (R2() - 0.5) * 0.5;
+    var len = 0.35 + R2() * 0.65;
+    var t = 0.03 + R2() * 0.04;
+
+    var bar = mkMesh(new THREE.BoxGeometry(len, t, t), neonMat.clone());
+    bar.position.set(Math.cos(a) * radius, baseY + (R2() - 0.5) * 0.5, Math.sin(a) * radius);
+    bar.rotation.y = a + Math.PI / 2;
+    bar.rotation.x = (R2() - 0.5) * 0.8;
+    g.add(bar);
+  }
+
+  var pl = new THREE.PointLight(col, 1.4, 6.5, 2.2);
+  pl.position.set(0, baseY + 0.3, 0);
+  g.add(pl);
+
+  var shd = mkMesh(
+    new THREE.CircleGeometry(radius * 1.25, 20),
+    new THREE.MeshStandardMaterial({ color: 0x000000, transparent: true, opacity: 0.12, roughness: 1, depthWrite: false })
+  );
+  shd.rotation.x = -Math.PI / 2;
+  shd.position.y = 0.003;
+  g.add(shd);
+
+  return g;
+}
+
 // ------ 空調設備 (HVAC unit) ------
 function buildHVAC(R2, H) {
   var g = new THREE.Group();
@@ -1916,15 +2323,42 @@ function buildFramedPainting(R2, palWr, palWg, palWb) {
   return g;
 }
 
-function addWallPaintings(grp, W, D, H, hw, hd, R2, pal) {
+function addWallPaintings(grp, W, D, H, hw, hd, R2, pal, doorInfo) {
+  doorInfo = doorInfo || {};
   var n = 1 + Math.floor(R2() * 3);
-  var hangY = H * (0.42 + R2() * 0.2);
   var INSET = WALL_T / 2 + 0.008;
+
+  // Conservative bounds to avoid overlapping the door opening.
+  // (buildFramedPainting sizes vary with R2; we approximate with the maximum half extents.)
+  var paintHalfW = 1.35; // approx half of (fw + frame)
+  var paintHalfH = 1.10; // approx half of (fh + frame)
+  var overlapGap = 0.10; // extra safety space
+
+  function pickPaintY(isDoorWall) {
+    var baseY = H * (0.42 + R2() * 0.2);
+    if (!isDoorWall) return baseY;
+
+    // Door opening spans y:[0 .. DOOR_H] at each door location.
+    var minY = paintHalfH + 0.05;
+    var maxY = H - paintHalfH - 0.05;
+    var above = doorInfo.DOOR_H + paintHalfH + overlapGap;
+    var below = doorInfo.DOOR_H - paintHalfH - overlapGap;
+
+    if (above <= maxY) return above + (R2() - 0.5) * 0.15;
+    if (below >= minY) return below + (R2() - 0.5) * 0.15;
+    // Fallback: clamp
+    return Math.max(minY, Math.min(maxY, baseY));
+  }
+
   var wallDefs = [
-    { axis:'z', pos:-hd+INSET, rotY:0,         len:W },
-    { axis:'z', pos: hd-INSET, rotY:Math.PI,   len:W },
-    { axis:'x', pos:-hw+INSET, rotY:Math.PI/2, len:D },
-    { axis:'x', pos: hw-INSET, rotY:-Math.PI/2,len:D }
+    // Front wall (z = -hd): always has a door.
+    { name:'front', axis:'z', pos:-hd+INSET, rotY:0,          len:W, doorExists:true,               doorCenterX:doorInfo.frontDX || 0 },
+    // Back wall (z = +hd): only if generated.
+    { name:'back',  axis:'z', pos: hd-INSET, rotY:Math.PI,    len:W, doorExists:!!doorInfo.hasDoorBack, doorCenterX:doorInfo.backDX  || 0 },
+    // Left wall (x = -hw)
+    { name:'left',  axis:'x', pos:-hw+INSET, rotY:Math.PI/2,  len:D, doorExists:!!doorInfo.hasDoorLeft, doorCenterZ:doorInfo.leftDZ   || 0 },
+    // Right wall (x = +hw)
+    { name:'right', axis:'x', pos: hw-INSET, rotY:-Math.PI/2, len:D, doorExists:!!doorInfo.hasDoorRight,doorCenterZ:doorInfo.rightDZ  || 0 }
   ];
   // Shuffle walls
   for (var i=wallDefs.length-1; i>0; i--) {
@@ -1933,7 +2367,28 @@ function addWallPaintings(grp, W, D, H, hw, hd, R2, pal) {
   for (var pi=0; pi<Math.min(n, wallDefs.length); pi++) {
     var wd = wallDefs[pi];
     var p = buildFramedPainting(R2, pal.wr, pal.wg, pal.wb);
+
+    var hangY = pickPaintY(!!wd.doorExists);
     var offset = (R2()-0.5) * wd.len * 0.45;
+
+    if (wd.doorExists) {
+      var doorW = doorInfo.DOOR_W || 2.5;
+      var limit = doorW / 2 + paintHalfW + overlapGap;
+      var doorCenter = (wd.axis === 'z') ? (wd.doorCenterX || 0) : (wd.doorCenterZ || 0);
+
+      // Re-roll a few times; if still overlapping, push to the nearest side.
+      var tries = 0;
+      while (tries < 6 && Math.abs(offset - doorCenter) < limit) {
+        offset = (R2()-0.5) * wd.len * 0.45;
+        tries++;
+      }
+      if (Math.abs(offset - doorCenter) < limit) {
+        var dir = offset - doorCenter;
+        if (dir === 0) dir = 1;
+        offset = doorCenter + (dir > 0 ? 1 : -1) * (limit + 0.05);
+      }
+    }
+
     if (wd.axis==='z') p.position.set(offset, hangY, wd.pos);
     else               p.position.set(wd.pos, hangY, offset);
     p.rotation.y = wd.rotY;
@@ -2069,6 +2524,15 @@ function buildInsect(R2, forcedType) {
   var type = (forcedType !== undefined) ? forcedType : Math.floor(R2() * 4);
   var s = 0.55 + R2() * 0.45;
   var legMeshes = [];
+  var eyeMeshes = [];
+  var eyeEmissiveBase = 7.5 + R2() * 2.5;
+  var eyeMatGlow = new THREE.MeshStandardMaterial({
+    color: 0xff2a2a,
+    emissive: new THREE.Color(0xff0000),
+    emissiveIntensity: eyeEmissiveBase,
+    roughness: 0.12,
+    metalness: 0.25
+  });
 
   // Object-like unrealistic colour palette (white/off-white/pale/ceramic/marble)
   var OBJ_COLS = [
@@ -2094,20 +2558,21 @@ function buildInsect(R2, forcedType) {
     var body = mkMesh(new THREE.BoxGeometry(0.28*s, 0.22*s, 0.75*s), mat);
     body.position.y = 0.28*s; g.add(body);
     // Abdomen tip
-    var abd = mkMesh(new THREE.CylinderGeometry(0.02*s, 0.15*s, 0.42*s, 8), mat.clone());
+    var abd = mkMesh(new THREE.BoxGeometry(0.06*s, 0.42*s, 0.11*s), mat.clone());
     abd.rotation.x = -0.15; abd.position.set(0, 0.26*s, 0.5*s); g.add(abd);
     // Head
-    var head = mkMesh(new THREE.SphereGeometry(0.17*s, 10, 8), mat.clone());
-    head.scale.set(0.9, 0.85, 1.05); head.position.set(0, 0.30*s, -0.48*s); g.add(head);
+    var head = mkMesh(new THREE.BoxGeometry(0.20*s, 0.14*s, 0.30*s), mat.clone());
+    head.rotation.x = -0.12; head.position.set(0, 0.30*s, -0.48*s); g.add(head);
     // Eyes
-    var eyeM = new THREE.MeshStandardMaterial({color:0x0c0c0a,emissive:new THREE.Color(0x000000),emissiveIntensity:0,roughness:0.1,metalness:0.6});
+    var eyeM = eyeMatGlow.clone();
     [-0.08*s,0.08*s].forEach(function(ex){
-      var e = mkMesh(new THREE.SphereGeometry(0.05*s,8,6),eyeM); e.position.set(ex,0.36*s,-0.6*s); g.add(e);
+      var e = mkMesh(new THREE.SphereGeometry(0.05*s,8,6),eyeM);
+      e.position.set(ex,0.36*s,-0.6*s); g.add(e); eyeMeshes.push(e);
     });
     // Antennae
     for (var ai=0;ai<2;ai++){
       var sign=ai===0?-1:1;
-      var ant=mkMesh(new THREE.CylinderGeometry(0.008*s,0.004*s,0.52*s,6),matDk.clone());
+      var ant=mkMesh(new THREE.BoxGeometry(0.008*s, 0.52*s, 0.004*s),matDk.clone());
       ant.rotation.z=sign*0.35; ant.rotation.x=-0.55;
       ant.position.set(sign*0.07*s,0.44*s,-0.62*s); g.add(ant);
     }
@@ -2116,10 +2581,10 @@ function buildInsect(R2, forcedType) {
     legDefs.forEach(function(ld,li){
       [-1,1].forEach(function(side){
         var lg=new THREE.Group(); lg.position.set(side*0.14*s,0.26*s,ld.z);
-        var up=mkMesh(new THREE.CylinderGeometry(0.02*s,0.015*s,ld.len*0.44,6),mat.clone());
+        var up=mkMesh(new THREE.BoxGeometry(0.02*s, ld.len*0.44, 0.015*s),mat.clone());
         up.rotation.z=side*(ld.hind?0.55:0.42); up.rotation.x=ld.hind?0.45:0.18;
         up.position.set(side*ld.len*0.17,-ld.len*0.08,ld.hind?-ld.len*0.08:0); lg.add(up);
-        var lo=mkMesh(new THREE.CylinderGeometry(0.015*s,0.01*s,ld.len*0.52,6),matDk.clone());
+        var lo=mkMesh(new THREE.BoxGeometry(0.015*s, ld.len*0.52, 0.01*s),matDk.clone());
         lo.rotation.z=side*(ld.hind?0.18:0.58); lo.rotation.x=ld.hind?-0.55:0.48;
         lo.position.set(side*ld.len*0.36,-ld.len*0.32,ld.hind?ld.len*0.16:ld.len*0.08); lg.add(lo);
         lg.userData.legPhaseOffset=(li*2+(side>0?1:0))*Math.PI/3;
@@ -2138,15 +2603,19 @@ function buildInsect(R2, forcedType) {
     var span  = (segCount - 1) * step;
     for (var si=0;si<segCount;si++){
       var sr = si===0 ? segR*1.05 : (si===segCount-1 ? segR*0.72 : segR*(0.88+R2()*0.22));
-      var seg = mkMesh(new THREE.SphereGeometry(sr,10,8), si%2===0?matS.clone():matS2.clone());
-      seg.scale.set(1.0,0.82,1.0); seg.position.set(0,sr*0.68,-si*step+span*0.5); g.add(seg);
+      var seg = mkMesh(
+        new THREE.BoxGeometry(sr*0.95, sr*0.42, sr*0.85),
+        si%2===0 ? matS.clone() : matS2.clone()
+      );
+      seg.position.set(0, sr*0.68, -si*step+span*0.5); g.add(seg);
     }
     // Head
-    var hd2 = mkMesh(new THREE.SphereGeometry(segR*1.18,10,8), matS.clone());
+    var hd2 = mkMesh(new THREE.BoxGeometry(segR*1.22, segR*0.75, segR*0.95), matS.clone());
     hd2.position.set(0,segR*0.82, span*0.5+segR*0.88); g.add(hd2);
-    var eyeM2=new THREE.MeshStandardMaterial({color:0x0c0c0a,roughness:0.05,metalness:0.8});
+    var eyeM2 = eyeMatGlow.clone();
     [-0.065*s,0.065*s].forEach(function(ex){
-      var e=mkMesh(new THREE.SphereGeometry(0.038*s,8,6),eyeM2); e.position.set(ex,segR*1.1,span*0.5+segR*1.18); g.add(e);
+      var e=mkMesh(new THREE.SphereGeometry(0.038*s,8,6),eyeM2);
+      e.position.set(ex,segR*1.1,span*0.5+segR*1.18); g.add(e); eyeMeshes.push(e);
     });
     // Stubby legs along body
     var pairN = Math.floor(segCount*0.7);
@@ -2155,7 +2624,7 @@ function buildInsect(R2, forcedType) {
         var lg=new THREE.Group();
         var lz = pi*(span/pairN) - span*0.45;
         lg.position.set(side*segR*0.88,segR*0.45,lz);
-        var stub=mkMesh(new THREE.CylinderGeometry(0.018*s,0.024*s,0.2*s,6),matS2.clone());
+        var stub=mkMesh(new THREE.BoxGeometry(0.018*s,0.2*s,0.024*s),matS2.clone());
         stub.rotation.z=side*0.72; lg.add(stub);
         lg.userData.legPhaseOffset=pi*Math.PI/(pairN*0.5)+(side>0?Math.PI:0);
         legMeshes.push(lg); g.add(lg);
@@ -2167,43 +2636,44 @@ function buildInsect(R2, forcedType) {
     var matR  = matStd(colMain, 0.18, 0.0);
     var matRL = matStd(colDark, 0.25, 0.0);
     // Pronotum
-    var pron = mkMesh(new THREE.SphereGeometry(0.22*s,12,8),matRL.clone());
-    pron.scale.set(1.12,0.38,0.85); pron.position.set(0,0.11*s,-0.1*s); g.add(pron);
+    var pron = mkMesh(new THREE.BoxGeometry(0.26*s,0.10*s,0.22*s),matRL.clone());
+    pron.position.set(0,0.11*s,-0.1*s); g.add(pron);
     // Abdomen
-    var abd2 = mkMesh(new THREE.SphereGeometry(0.30*s,12,8),matR.clone());
-    abd2.scale.set(1.05,0.36,1.22); abd2.position.set(0,0.09*s,0.26*s); g.add(abd2);
+    var abd2 = mkMesh(new THREE.BoxGeometry(0.34*s,0.12*s,0.44*s),matR.clone());
+    abd2.position.set(0,0.09*s,0.26*s); g.add(abd2);
     // Forewing ridges
     [-1,1].forEach(function(side){
       var fw=mkMesh(new THREE.BoxGeometry(0.14*s,0.04*s,0.55*s),matRL.clone());
       fw.position.set(side*0.14*s,0.14*s,0.12*s); fw.rotation.z=side*0.08; g.add(fw);
     });
     // Head
-    var hd3=mkMesh(new THREE.SphereGeometry(0.13*s,10,8),matR.clone());
-    hd3.scale.set(0.88,0.65,0.88); hd3.position.set(0,0.13*s,-0.37*s); g.add(hd3);
+    var hd3=mkMesh(new THREE.BoxGeometry(0.16*s,0.10*s,0.22*s),matR.clone());
+    hd3.position.set(0,0.13*s,-0.37*s); g.add(hd3);
     // Eyes — dark polished spheres
-    var eyeR=new THREE.MeshStandardMaterial({color:0x080808,roughness:0.04,metalness:0.7});
+    var eyeR = eyeMatGlow.clone();
     [-0.08*s,0.08*s].forEach(function(ex){
-      var e=mkMesh(new THREE.SphereGeometry(0.032*s,8,6),eyeR); e.position.set(ex,0.17*s,-0.43*s); g.add(e);
+      var e=mkMesh(new THREE.SphereGeometry(0.032*s,8,6),eyeR);
+      e.position.set(ex,0.17*s,-0.43*s); g.add(e); eyeMeshes.push(e);
     });
     // Long antennae (2 segments each)
     for (var ai3=0;ai3<2;ai3++){
       var sgn=ai3===0?-1:1;
-      var a1=mkMesh(new THREE.CylinderGeometry(0.007*s,0.005*s,0.58*s,6),matRL.clone());
+      var a1=mkMesh(new THREE.BoxGeometry(0.007*s,0.58*s,0.004*s),matRL.clone());
       a1.rotation.z=sgn*0.28; a1.rotation.x=-0.32; a1.position.set(sgn*0.075*s,0.17*s,-0.52*s); g.add(a1);
-      var a2=mkMesh(new THREE.CylinderGeometry(0.004*s,0.002*s,0.48*s,6),matRL.clone());
+      var a2=mkMesh(new THREE.BoxGeometry(0.004*s,0.48*s,0.002*s),matRL.clone());
       a2.rotation.z=sgn*0.5; a2.rotation.x=-0.12; a2.position.set(sgn*0.21*s,0.19*s,-0.72*s); g.add(a2);
     }
     // 6 legs
     [{z:-0.22*s,l:0.5*s},{z:0.0*s,l:0.55*s},{z:0.20*s,l:0.46*s}].forEach(function(lp,li){
       [-1,1].forEach(function(side){
         var lg=new THREE.Group(); lg.position.set(side*0.17*s,0.09*s,lp.z);
-        var up=mkMesh(new THREE.CylinderGeometry(0.02*s,0.014*s,lp.l*0.4,6),matRL.clone());
+        var up=mkMesh(new THREE.BoxGeometry(0.02*s,lp.l*0.4,0.014*s),matRL.clone());
         up.rotation.z=side*1.18; up.rotation.x=0.1;
         up.position.set(side*lp.l*0.15,0,0); lg.add(up);
-        var lo=mkMesh(new THREE.CylinderGeometry(0.012*s,0.008*s,lp.l*0.52,6),matR.clone());
+        var lo=mkMesh(new THREE.BoxGeometry(0.012*s,lp.l*0.52,0.008*s),matR.clone());
         lo.rotation.z=side*0.88; lo.rotation.x=0.42;
         lo.position.set(side*lp.l*0.34,-lp.l*0.11,lp.l*0.07); lg.add(lo);
-        var ft=mkMesh(new THREE.CylinderGeometry(0.006*s,0.002*s,lp.l*0.26,6),matR.clone());
+        var ft=mkMesh(new THREE.BoxGeometry(0.006*s,lp.l*0.26,0.002*s),matR.clone());
         ft.rotation.z=side*0.55; ft.rotation.x=0.82;
         ft.position.set(side*lp.l*0.50,-lp.l*0.26,lp.l*0.17); lg.add(ft);
         lg.userData.legPhaseOffset=(li*2+(side>0?1:0))*Math.PI/3;
@@ -2217,16 +2687,17 @@ function buildInsect(R2, forcedType) {
     var matScL = matStd(colDark, 0.26, 0.0);
     var matSting = matStd(colDark, 0.08, 0.5);
     // Cephalothorax
-    var ceph2=mkMesh(new THREE.SphereGeometry(0.28*s,12,8),matSc.clone());
-    ceph2.scale.set(1.1,0.62,1.28); ceph2.position.set(0,0.20*s,0.05*s); g.add(ceph2);
+    var ceph2=mkMesh(new THREE.BoxGeometry(0.34*s,0.14*s,0.42*s),matSc.clone());
+    ceph2.position.set(0,0.20*s,0.05*s); g.add(ceph2);
     // Multi-eyes — tiny dark polished spheres
-    var eyeSc=new THREE.MeshStandardMaterial({color:0x080808,roughness:0.04,metalness:0.8});
+    var eyeSc = eyeMatGlow.clone();
     [[-0.06*s,-0.1*s],[0.06*s,-0.1*s],[0,-0.04*s]].forEach(function(ep){
-      var e=mkMesh(new THREE.SphereGeometry(0.028*s,8,6),eyeSc); e.position.set(ep[0],0.36*s,ep[1]); g.add(e);
+      var e=mkMesh(new THREE.SphereGeometry(0.028*s,8,6),eyeSc);
+      e.position.set(ep[0],0.36*s,ep[1]); g.add(e); eyeMeshes.push(e);
     });
     // Claws
     [-1,1].forEach(function(side){
-      var arm=mkMesh(new THREE.CylinderGeometry(0.038*s,0.052*s,0.36*s,8),matScL.clone());
+      var arm=mkMesh(new THREE.BoxGeometry(0.045*s,0.36*s,0.05*s),matScL.clone());
       arm.rotation.z=side*0.75; arm.rotation.x=0.22;
       arm.position.set(side*0.26*s,0.16*s,-0.37*s); g.add(arm);
       var clU=mkMesh(new THREE.BoxGeometry(0.055*s,0.05*s,0.22*s),matScL.clone());
@@ -2238,21 +2709,24 @@ function buildInsect(R2, forcedType) {
     // Tail (5 segments arching up)
     var tPos=new THREE.Vector3(0,0.18*s,0.36*s);
     for (var ti=0;ti<5;ti++){
-      var tSeg=mkMesh(new THREE.SphereGeometry(0.11*s*(1-ti*0.035),10,8),matScL.clone());
-      tSeg.scale.set(0.78,0.72,1.0);
+      var segF = (1 - ti*0.035);
+      var tSeg=mkMesh(
+        new THREE.BoxGeometry(0.16*s*segF, 0.06*s*segF, 0.14*s*segF),
+        matScL.clone()
+      );
       tSeg.position.set(0, tPos.y+ti*0.12*s*(1-ti*0.08), tPos.z+ti*0.15*s);
       tPos.copy(tSeg.position); g.add(tSeg);
     }
-    var stng=mkMesh(new THREE.CylinderGeometry(0,0.055*s,0.26*s,8),matSting);
+    var stng=mkMesh(new THREE.BoxGeometry(0.02*s,0.26*s,0.01*s),matSting);
     stng.rotation.x=-0.85; stng.position.set(0,tPos.y+0.14*s,tPos.z+0.12*s); g.add(stng);
     // 8 legs (4 pairs)
     [{z:-0.18*s,l:0.50*s},{z:-0.04*s,l:0.54*s},{z:0.10*s,l:0.52*s},{z:0.23*s,l:0.48*s}].forEach(function(lp,li){
       [-1,1].forEach(function(side){
         var lg=new THREE.Group(); lg.position.set(side*0.20*s,0.16*s,lp.z);
-        var up=mkMesh(new THREE.CylinderGeometry(0.022*s,0.016*s,lp.l*0.42,6),matScL.clone());
+        var up=mkMesh(new THREE.BoxGeometry(0.022*s,lp.l*0.42,0.016*s),matScL.clone());
         up.rotation.z=side*1.08; up.rotation.x=0.14;
         up.position.set(side*lp.l*0.16,0,0); lg.add(up);
-        var lo=mkMesh(new THREE.CylinderGeometry(0.013*s,0.009*s,lp.l*0.5,6),matSc.clone());
+        var lo=mkMesh(new THREE.BoxGeometry(0.013*s,lp.l*0.5,0.009*s),matSc.clone());
         lo.rotation.z=side*0.68; lo.rotation.x=0.48;
         lo.position.set(side*lp.l*0.33,-lp.l*0.14,lp.l*0.09); lg.add(lo);
         lg.userData.legPhaseOffset=(li*2+(side>0?1:0))*Math.PI/4;
@@ -2281,6 +2755,8 @@ function buildInsect(R2, forcedType) {
   g.userData.wanderTimer   = 1.0 + Math.random()*3.0;
   g.userData.wanderFacing  = 0;
   g.userData.isAlert       = false;
+  g.userData.eyeMeshes = eyeMeshes;
+  g.userData.eyeEmissiveBase = eyeEmissiveBase;
 
   return g;
 }
@@ -2430,6 +2906,16 @@ function updateInteractables(dt) {
               var lm = lms[lii];
               var lph = ud.phase * spd + lm.userData.legPhaseOffset;
               lm.rotation.x = Math.sin(lph) * amp;
+            }
+          }
+          // Eye glow pulse (red)
+          if (ud.eyeMeshes && ud.eyeMeshes.length) {
+            var baseInt = ud.eyeEmissiveBase || 8.0;
+            var eyePulse = 1.0 + Math.sin(ud.phase * 10.0) * (ud.isAlert ? 0.35 : 0.22);
+            var eyeInt = baseInt * eyePulse;
+            for (var ei = 0; ei < ud.eyeMeshes.length; ei++) {
+              var em = ud.eyeMeshes[ei];
+              if (em && em.material) em.material.emissiveIntensity = eyeInt;
             }
           }
           // Player proximity reaction
@@ -3592,7 +4078,7 @@ function buildRoom(seed) {
       else if (mType===3) exGrp=buildMegaObelisk(R2,H);
       else                exGrp=buildMegaTorus(R2,H);
     } else {
-      var eType=Math.floor(R2()*30);
+      var eType=Math.floor(R2()*36);
       if      (eType===0)  exGrp=buildMonolith(R2,H);
       else if (eType===1)  exGrp=buildSphere(R2);
       else if (eType===2)  exGrp=buildSculpture(R2);
@@ -3622,6 +4108,13 @@ function buildRoom(seed) {
       else if (eType===26) exGrp=buildVideoTape(R2);
       else if (eType===27) exGrp=buildUnicorn(R2);
       else if (eType===28) exGrp=buildOilTimer(R2);
+      else if (eType===29) exGrp=buildHVAC(R2,H);
+      else if (eType===30) exGrp=buildGiantSpeaker(R2,H);
+      else if (eType===31) exGrp=buildSubstationTransformer(R2,H);
+      else if (eType===32) exGrp=buildDJBooth(R2,H);
+      else if (eType===33) exGrp=buildAnalogSynth(R2,H);
+      else if (eType===34) exGrp=buildAnalogEqualizer(R2,H);
+      else if (eType===35) exGrp=buildNeonSculpture(R2,H);
       else                 exGrp=buildHVAC(R2,H);
     }
     var mW=isMega?20:4, mD2=isMega?20:6;
@@ -3639,7 +4132,14 @@ function buildRoom(seed) {
     brutalist:'BRUTALIST',narrow:'CORRIDOR',octagon:'OCTAGON',vault:'VAULT' };
   var paintableShapes = ['rect','lshape','cross','brutalist','atrium','vault','narrow','octagon','hex'];
   if (paintableShapes.indexOf(shapeType) >= 0) {
-    addWallPaintings(grp, W, D, H, hw, hd, R2, pal);
+    addWallPaintings(grp, W, D, H, hw, hd, R2, pal, {
+      DOOR_W: DOOR_W, DOOR_H: DOOR_H,
+      frontDX: frontDX, backDX: backDX,
+      leftDZ: leftDZ, rightDZ: rightDZ,
+      hasDoorBack: hasDoorBack,
+      hasDoorLeft: hasDoorLeft,
+      hasDoorRight: hasDoorRight
+    });
   }
 
   // ---- interactables (memo + creature) ----
