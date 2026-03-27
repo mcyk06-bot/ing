@@ -148,20 +148,21 @@ canvas.locked{cursor:none}
 }
 #memo-label.visible{opacity:1}
 
-/* shoot button */
+/* capture button */
 #shoot-btn{
   position:fixed;bottom:160px;left:50%;
   transform:translateX(-50%);
-  background:rgba(200,30,30,0.75);
-  border:1px solid rgba(255,80,80,0.6);
-  color:#fff;font-size:11px;
+  background:rgba(0,110,200,0.75);
+  border:1px solid rgba(0,200,255,0.65);
+  color:#00eeff;font-size:11px;
   letter-spacing:0.5em;font-weight:bold;
   font-family:'Helvetica Neue',sans-serif;
   padding:12px 28px;cursor:pointer;
   z-index:300;opacity:0;
   transition:opacity 0.25s,transform 0.1s;
   pointer-events:none;
-  -webkit-tap-highlight-color:transparent
+  -webkit-tap-highlight-color:transparent;
+  text-shadow:0 0 8px rgba(0,200,255,0.6)
 }
 #shoot-btn.visible{opacity:1;pointer-events:auto}
 #shoot-btn:active{transform:translateX(-50%) scale(0.93)}
@@ -169,11 +170,159 @@ canvas.locked{cursor:none}
   position:fixed;top:50%;left:50%;
   width:28px;height:28px;
   transform:translate(-50%,-50%);
-  border:1.5px solid rgba(255,80,80,0);
+  border:1.5px solid rgba(0,200,255,0);
   border-radius:50%;pointer-events:none;
   z-index:200;transition:border-color 0.2s
 }
-#crosshair-hit.aimed{border-color:rgba(255,80,80,0.7)}
+#crosshair-hit.aimed{border-color:rgba(0,200,255,0.8)}
+
+/* capture notification */
+#capture-notify{
+  position:fixed;top:38%;left:50%;
+  transform:translate(-50%,-50%);
+  background:rgba(0,12,28,0.92);
+  border:1px solid rgba(0,200,255,0.45);
+  color:rgba(200,240,255,0.95);
+  font-family:'Helvetica Neue',sans-serif;
+  font-size:10px;letter-spacing:0.45em;
+  padding:14px 28px 12px;
+  z-index:500;opacity:0;pointer-events:none;
+  transition:opacity 0.3s;
+  box-shadow:0 0 24px rgba(0,180,255,0.18),inset 0 0 18px rgba(0,100,255,0.08)
+}
+#capture-notify.visible{opacity:1}
+#capture-name{
+  font-size:15px;letter-spacing:0.3em;
+  color:#00eeff;display:block;
+  margin-bottom:5px;text-align:center
+}
+#capture-sub{
+  font-size:9px;letter-spacing:0.4em;
+  color:rgba(150,210,255,0.65);
+  display:block;text-align:center
+}
+
+/* 図鑑ボタン */
+#zukan-btn{
+  position:fixed;bottom:32px;left:24px;
+  z-index:150;
+  background:rgba(0,0,0,0.55);
+  border:1px solid rgba(0,180,255,0.28);
+  color:rgba(0,180,255,0.75);
+  font-size:9px;letter-spacing:0.45em;
+  font-family:'Helvetica Neue',sans-serif;
+  padding:10px 18px;cursor:pointer;
+  transition:background 0.2s,color 0.2s;
+  -webkit-tap-highlight-color:transparent;
+  user-select:none
+}
+#zukan-btn:hover{background:rgba(0,100,255,0.15);color:rgba(0,220,255,0.95)}
+
+/* コレクションオーバーレイ */
+#collection-overlay{
+  position:fixed;inset:0;
+  background:rgba(0,4,12,0.97);
+  z-index:700;display:none;
+  overflow-y:auto;-webkit-overflow-scrolling:touch;
+  font-family:'Helvetica Neue',sans-serif
+}
+#collection-overlay.open{display:block}
+#collection-header{
+  position:sticky;top:0;
+  background:rgba(0,4,12,0.98);
+  border-bottom:1px solid rgba(0,180,255,0.14);
+  padding:20px 24px 14px;
+  display:flex;align-items:baseline;gap:16px;
+  z-index:10
+}
+#collection-title{
+  color:rgba(200,240,255,0.9);
+  font-size:11px;letter-spacing:0.55em
+}
+#collection-count{
+  color:rgba(0,180,255,0.7);
+  font-size:9px;letter-spacing:0.4em
+}
+#collection-close{
+  margin-left:auto;
+  background:none;border:1px solid rgba(255,255,255,0.15);
+  color:rgba(255,255,255,0.45);
+  font-size:9px;letter-spacing:0.4em;
+  padding:6px 14px;cursor:pointer;
+  font-family:'Helvetica Neue',sans-serif;
+  transition:border-color 0.2s,color 0.2s
+}
+#collection-close:hover{border-color:rgba(255,255,255,0.4);color:rgba(255,255,255,0.8)}
+#collection-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(148px,1fr));
+  gap:12px;padding:20px 20px 40px
+}
+.cr-card{
+  background:rgba(4,10,20,0.9);
+  border:1px solid rgba(255,255,255,0.07);
+  padding:12px 10px 10px;
+  display:flex;flex-direction:column;
+  align-items:center;gap:7px;
+  cursor:default;transition:border-color 0.25s
+}
+.cr-card.captured{
+  border-color:rgba(0,180,255,0.3);
+  box-shadow:0 0 12px rgba(0,150,255,0.08)
+}
+.cr-card.new-capture{
+  animation:captureCardPulse 0.7s ease
+}
+@keyframes captureCardPulse{
+  0%{box-shadow:0 0 0 rgba(0,200,255,0)}
+  40%{box-shadow:0 0 28px rgba(0,200,255,0.55)}
+  100%{box-shadow:0 0 12px rgba(0,150,255,0.08)}
+}
+.cr-card-top{
+  width:100%;display:flex;justify-content:space-between;
+  align-items:center
+}
+.cr-danger{
+  font-size:8px;letter-spacing:0.3em;
+  padding:2px 6px;border:1px solid;
+  font-weight:bold
+}
+.cr-id{
+  font-size:8px;color:rgba(255,255,255,0.2);
+  letter-spacing:0.25em
+}
+.cr-count{
+  font-size:8px;color:rgba(0,200,255,0.6);
+  letter-spacing:0.2em
+}
+.cr-icon{display:block}
+.cr-name{
+  font-size:13px;letter-spacing:0.3em;
+  color:rgba(200,240,255,0.92);
+  text-align:center
+}
+.cr-name-unknown{
+  font-size:13px;letter-spacing:0.2em;
+  color:rgba(255,255,255,0.12);
+  text-align:center
+}
+.cr-badges{display:flex;gap:5px;flex-wrap:wrap;justify-content:center}
+.cr-badge{
+  font-size:7px;letter-spacing:0.25em;
+  padding:2px 5px;border:1px solid rgba(255,255,255,0.15);
+  color:rgba(200,220,240,0.7)
+}
+.cr-caption{
+  font-size:8px;line-height:1.6;letter-spacing:0.08em;
+  color:rgba(160,200,220,0.55);
+  text-align:center;width:100%
+}
+.cr-unknown-badge{
+  font-size:8px;letter-spacing:0.35em;
+  color:rgba(255,255,255,0.12);
+  border:1px solid rgba(255,255,255,0.07);
+  padding:3px 10px
+}
 </style>
 </head>
 <body>
@@ -184,7 +333,7 @@ canvas.locked{cursor:none}
 <canvas id="canvas"></canvas>
 <div id="room-info">ROOM 001</div>
 <div id="door-hint">— EXIT —</div>
-<div id="pc-hint">CLICK TO ENTER &nbsp;|&nbsp; TAB : CURSOR &nbsp;|&nbsp; N : NEXT</div>
+<div id="pc-hint">CLICK TO ENTER &nbsp;|&nbsp; TAB : CURSOR &nbsp;|&nbsp; N : NEXT &nbsp;|&nbsp; Z : 図鑑</div>
 <div id="stick-zone"><div id="stick-ring"><div id="stick-knob"></div></div></div>
 <div id="look-right"></div>
 <div id="fade"></div>
@@ -192,12 +341,284 @@ canvas.locked{cursor:none}
 <div id="speed-indicator">RUN</div>
 <div id="memo-popup"></div>
 <div id="memo-label">— READ —</div>
-<button id="shoot-btn">SHOOT</button>
+<button id="shoot-btn">捕獲ビーム</button>
 <div id="crosshair-hit"></div>
+<div id="capture-notify"><span id="capture-name"></span><span id="capture-sub"></span></div>
+<button id="zukan-btn">[Z] 図鑑</button>
+<div id="collection-overlay">
+  <div id="collection-header">
+    <span id="collection-title">捕獲図鑑 — FIELD RECORD</span>
+    <span id="collection-count">0 / 20 発見済み</span>
+    <button id="collection-close">[ESC] 閉じる</button>
+  </div>
+  <div id="collection-grid"></div>
+</div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="creatures.js"></script>
 <script>
 'use strict';
 /* globals THREE */
+
+/* ----------------------------------------------------------
+   Collection / 捕獲図鑑 system
+---------------------------------------------------------- */
+var COLLECTION_KEY = 'gallery_collection_v1';
+var capturedCollection = {}; // { [id]: count }
+
+function loadCollection() {
+  try {
+    var raw = localStorage.getItem(COLLECTION_KEY);
+    if (raw) capturedCollection = JSON.parse(raw);
+  } catch(e) { capturedCollection = {}; }
+}
+
+function saveCollection() {
+  try { localStorage.setItem(COLLECTION_KEY, JSON.stringify(capturedCollection)); } catch(e) {}
+}
+
+function updateCollection(id) {
+  capturedCollection[id] = (capturedCollection[id] || 0) + 1;
+  saveCollection();
+  refreshCollectionUI(id);
+}
+
+function getTotalCaptured() {
+  return Object.keys(capturedCollection).length;
+}
+
+loadCollection();
+
+/* ---- 捕獲通知 ---- */
+var captureNotifyEl = document.getElementById('capture-notify');
+var captureNameEl   = document.getElementById('capture-name');
+var captureSubEl    = document.getElementById('capture-sub');
+var captureNotifyTimer = null;
+
+function showCaptureNotification(id) {
+  var def = CREATURE_DATA[id];
+  if (!def) return;
+  var isNew = capturedCollection[id] <= 1;
+  captureNameEl.textContent = def.name;
+  captureSubEl.textContent  = (isNew ? '── 新種捕獲 ──' : '── 再捕獲 × ' + capturedCollection[id] + ' ──');
+  captureNotifyEl.classList.add('visible');
+  if (captureNotifyTimer) clearTimeout(captureNotifyTimer);
+  captureNotifyTimer = setTimeout(function() {
+    captureNotifyEl.classList.remove('visible');
+  }, 2400);
+}
+
+/* ---- フェードアウト捕獲アニメ ---- */
+var fadingCreatures = [];
+
+function startFadeCapture(mesh) {
+  fadingCreatures.push({ mesh: mesh, age: 0, duration: 0.7 });
+}
+
+function updateFadingCreatures(dt) {
+  for (var i = fadingCreatures.length - 1; i >= 0; i--) {
+    var fc = fadingCreatures[i];
+    fc.age += dt;
+    var t = Math.min(1, fc.age / fc.duration);
+    // Scale down + float up
+    var s = 1.0 - t * t;
+    fc.mesh.scale.set(s, s, s);
+    fc.mesh.position.y += dt * 0.9 * (1 - t * 0.5);
+    // Fade all materials
+    fc.mesh.traverse(function(child) {
+      if (child.material) {
+        child.material.transparent = true;
+        child.material.opacity = Math.max(0, 1 - t * 1.6);
+      }
+    });
+    if (t >= 1) {
+      if (fc.mesh.parent) fc.mesh.parent.remove(fc.mesh);
+      else scene.remove(fc.mesh);
+      fadingCreatures.splice(i, 1);
+    }
+  }
+}
+
+/* ---- 図鑑UI ---- */
+var collectionOverlay = document.getElementById('collection-overlay');
+var collectionGrid    = document.getElementById('collection-grid');
+var collectionCount   = document.getElementById('collection-count');
+var zukanBtn          = document.getElementById('zukan-btn');
+var collectionClose   = document.getElementById('collection-close');
+var collectionOpen    = false;
+
+function buildCollectionGrid() {
+  collectionGrid.innerHTML = '';
+  var total = getTotalCaptured();
+  collectionCount.textContent = total + ' / ' + CREATURE_DATA.length + ' 発見済み';
+
+  CREATURE_DATA.forEach(function(def) {
+    var card = document.createElement('div');
+    card.className = 'cr-card' + (capturedCollection[def.id] ? ' captured' : '');
+    card.id = 'crcard-' + def.id;
+
+    var isCaptured = !!capturedCollection[def.id];
+    var count = capturedCollection[def.id] || 0;
+    var ec = ELEMENT_COLORS[def.element] || ELEMENT_COLORS['無'];
+    var dc = DANGER_COLORS[def.danger] || '#888888';
+
+    // Top row: danger + id
+    var topDiv = document.createElement('div');
+    topDiv.className = 'cr-card-top';
+    var dangSpan = document.createElement('span');
+    dangSpan.className = 'cr-danger';
+    dangSpan.style.color = dc; dangSpan.style.borderColor = dc + '88';
+    dangSpan.textContent = isCaptured ? ('危険度 ' + def.danger) : '? ? ?';
+    var idSpan = document.createElement('span');
+    idSpan.className = 'cr-id';
+    idSpan.textContent = '#' + String(def.id).padStart(3,'0');
+    topDiv.appendChild(dangSpan); topDiv.appendChild(idSpan);
+    card.appendChild(topDiv);
+
+    // count badge (captured only)
+    if (isCaptured && count > 1) {
+      var countSpan = document.createElement('span');
+      countSpan.className = 'cr-count';
+      countSpan.textContent = '× ' + count;
+      card.appendChild(countSpan);
+    }
+
+    // Icon canvas
+    var iconCanvas = document.createElement('canvas');
+    iconCanvas.className = 'cr-icon';
+    iconCanvas.width = 64; iconCanvas.height = 64;
+    if (isCaptured) {
+      drawCreatureIcon(iconCanvas, def.visualType, def.element);
+    } else {
+      // Unknown silhouette
+      var ctx2 = iconCanvas.getContext('2d');
+      ctx2.fillStyle = 'rgba(255,255,255,0.05)';
+      ctx2.beginPath(); ctx2.arc(32, 32, 22, 0, Math.PI * 2); ctx2.fill();
+      ctx2.fillStyle = 'rgba(255,255,255,0.08)';
+      ctx2.font = '22px sans-serif'; ctx2.textAlign = 'center'; ctx2.textBaseline = 'middle';
+      ctx2.fillText('?', 32, 32);
+    }
+    card.appendChild(iconCanvas);
+
+    // Name
+    var nameEl = document.createElement('span');
+    if (isCaptured) {
+      nameEl.className = 'cr-name';
+      nameEl.textContent = def.name;
+      nameEl.style.color = ec.text;
+    } else {
+      nameEl.className = 'cr-name-unknown';
+      nameEl.textContent = '未捕獲';
+    }
+    card.appendChild(nameEl);
+
+    if (isCaptured) {
+      // Badges
+      var badgeDiv = document.createElement('div');
+      badgeDiv.className = 'cr-badges';
+      [def.type, def.element + '属性'].forEach(function(b) {
+        var bsp = document.createElement('span');
+        bsp.className = 'cr-badge';
+        bsp.style.borderColor = ec.border + '55';
+        bsp.style.color = ec.text + 'bb';
+        bsp.textContent = b;
+        badgeDiv.appendChild(bsp);
+      });
+      card.appendChild(badgeDiv);
+      // Caption
+      var capEl = document.createElement('div');
+      capEl.className = 'cr-caption';
+      capEl.textContent = def.caption;
+      card.appendChild(capEl);
+    } else {
+      var unkBadge = document.createElement('span');
+      unkBadge.className = 'cr-unknown-badge';
+      unkBadge.textContent = '情報なし';
+      card.appendChild(unkBadge);
+    }
+
+    collectionGrid.appendChild(card);
+  });
+}
+
+function refreshCollectionUI(newId) {
+  collectionCount.textContent = getTotalCaptured() + ' / ' + CREATURE_DATA.length + ' 発見済み';
+  var card = document.getElementById('crcard-' + newId);
+  if (card) {
+    // Rebuild this card
+    var def = CREATURE_DATA[newId];
+    var isCaptured = !!capturedCollection[newId];
+    var count = capturedCollection[newId] || 0;
+    var ec = ELEMENT_COLORS[def.element] || ELEMENT_COLORS['無'];
+    var dc = DANGER_COLORS[def.danger] || '#888888';
+
+    card.className = 'cr-card captured new-capture';
+    setTimeout(function() { card.classList.remove('new-capture'); }, 900);
+    card.innerHTML = '';
+
+    var topDiv = document.createElement('div');
+    topDiv.className = 'cr-card-top';
+    var dangSpan = document.createElement('span');
+    dangSpan.className = 'cr-danger';
+    dangSpan.style.color = dc; dangSpan.style.borderColor = dc + '88';
+    dangSpan.textContent = '危険度 ' + def.danger;
+    var idSpan = document.createElement('span');
+    idSpan.className = 'cr-id';
+    idSpan.textContent = '#' + String(def.id).padStart(3,'0');
+    topDiv.appendChild(dangSpan); topDiv.appendChild(idSpan);
+    card.appendChild(topDiv);
+
+    if (count > 1) {
+      var cSp = document.createElement('span');
+      cSp.className = 'cr-count';
+      cSp.textContent = '× ' + count;
+      card.appendChild(cSp);
+    }
+
+    var ic = document.createElement('canvas');
+    ic.className = 'cr-icon'; ic.width = 64; ic.height = 64;
+    drawCreatureIcon(ic, def.visualType, def.element);
+    card.appendChild(ic);
+
+    var nm = document.createElement('span');
+    nm.className = 'cr-name'; nm.style.color = ec.text;
+    nm.textContent = def.name;
+    card.appendChild(nm);
+
+    var bd = document.createElement('div'); bd.className = 'cr-badges';
+    [def.type, def.element + '属性'].forEach(function(b) {
+      var bsp2 = document.createElement('span');
+      bsp2.className = 'cr-badge';
+      bsp2.style.borderColor = ec.border + '55';
+      bsp2.style.color = ec.text + 'bb';
+      bsp2.textContent = b;
+      bd.appendChild(bsp2);
+    });
+    card.appendChild(bd);
+
+    var cp = document.createElement('div');
+    cp.className = 'cr-caption';
+    cp.textContent = def.caption;
+    card.appendChild(cp);
+  }
+}
+
+function openCollection() {
+  buildCollectionGrid();
+  collectionOverlay.classList.add('open');
+  collectionOpen = true;
+  if (document.pointerLockElement) document.exitPointerLock();
+}
+
+function closeCollection() {
+  collectionOverlay.classList.remove('open');
+  collectionOpen = false;
+}
+
+zukanBtn.addEventListener('click', function() {
+  if (collectionOpen) closeCollection();
+  else openCollection();
+});
+collectionClose.addEventListener('click', closeCollection);
 
 /* ----------------------------------------------------------
    DOM refs
@@ -2881,11 +3302,11 @@ function registerInteractable(type, worldX, worldY, worldZ, data, mesh) {
 
 function fireBeam() {
   if (transitioning) return;
-  // Lighter projectile: glowing sphere (cheaper than torus ring)
+  // 捕獲ビーム: cyan projectile
   var beamGeo = new THREE.SphereGeometry(0.11, 10, 8);
   var beamMat = new THREE.MeshStandardMaterial({
-    color: 0xff2020, emissive: new THREE.Color(0xff0000),
-    emissiveIntensity: 4.0, transparent: true, opacity: 0.88
+    color: 0x00ccff, emissive: new THREE.Color(0x0088ff),
+    emissiveIntensity: 4.5, transparent: true, opacity: 0.90
   });
   var beam = new THREE.Mesh(beamGeo, beamMat);
   // Position at camera, along look direction
@@ -2894,12 +3315,12 @@ function fireBeam() {
   beam.position.copy(camera.position).addScaledVector(dir, 0.6);
   scene.add(beam);
   // Point light on beam
-  var bpl = new THREE.PointLight(0xff2020, 3.0, 4.0, 2.0);
+  var bpl = new THREE.PointLight(0x00ccff, 3.2, 4.0, 2.0);
   bpl.position.copy(beam.position);
   scene.add(bpl);
   activeBeams.push({ mesh: beam, light: bpl, dir: dir.clone(), speed: 0.32, age: 0 });
   // Sound-like camera punch
-  camera.position.addScaledVector(dir, -0.05);
+  camera.position.addScaledVector(dir, -0.04);
 }
 
 shootBtnEl.addEventListener('click', fireBeam);
@@ -2929,15 +3350,19 @@ function updateInteractables(dt) {
       var dist = b.mesh.position.distanceTo(itc.pos);
       var hitRadius = (itc.mesh && itc.mesh.userData.isInsect) ? 1.1 + scale*0.55 : 0.9 + scale*0.5;
       if (dist < hitRadius) {
-        // Hit!
+        // 捕獲！
         itc.alive = false;
-        if (itc.mesh && itc.mesh.parent) { itc.mesh.parent.remove(itc.mesh); }
-        else { scene.remove(itc.mesh); }
-        // Flash
-        var flash = new THREE.PointLight(0xff4400, 8.0, 5.0, 2.0);
+        var capturedId = (itc.data && itc.data.creatureId !== undefined)
+          ? itc.data.creatureId
+          : Math.floor(Math.random() * CREATURE_DATA.length);
+        updateCollection(capturedId);
+        showCaptureNotification(capturedId);
+        startFadeCapture(itc.mesh);
+        // Cyan capture flash
+        var flash = new THREE.PointLight(0x00ccff, 10.0, 6.0, 2.0);
         flash.position.copy(itc.pos);
         scene.add(flash);
-        setTimeout(function() { scene.remove(flash); }, 400);
+        setTimeout(function() { scene.remove(flash); }, 500);
       }
     }
     if (b.age > 2.5 || b.mesh.material.opacity <= 0) {
@@ -4330,36 +4755,50 @@ function buildRoom(seed) {
   }
   // Very rare creature (15% chance)
   if (R2() < 0.15) {
-    var crMesh = buildCreature(R2);
+    var crId = Math.floor(R2() * CREATURE_DATA.length);
+    var crDef = CREATURE_DATA[crId];
+    var crMesh;
+    if (crDef.visualType === 'cloth') {
+      crMesh = buildCreature(R2);
+    } else {
+      var crInsType = parseInt(crDef.visualType.replace('insect',''));
+      crMesh = buildInsect(R2, crInsType);
+    }
     var crX = (R2()-0.5)*Math.max(2, W-6);
     var crZ = (R2()-0.5)*Math.max(2, D-6);
     crMesh.position.set(crX, 0, crZ);
     crMesh.rotation.y = R2()*Math.PI*2;
     crMesh.userData.baseY = 0;
+    crMesh.userData.creatureId = crId;
     // Set initial wander target
     crMesh.userData.wanderTarget.set(crX, 0, crZ);
     crMesh.userData.wanderTimer = 2.0 + Math.random() * 3.0;
     grp.add(crMesh);
-    interactables.push({ type:'creature', lx:crX, ly:0.8, lz:crZ, data:{}, mesh:crMesh });
+    interactables.push({ type:'creature', lx:crX, ly:0.8, lz:crZ, data:{creatureId:crId}, mesh:crMesh });
   }
   // Insects: 55% chance, 1-3 insects per room
   if (R2() < 0.55) {
     var insectCount = 1 + Math.floor(R2() * 3);
-    var insectTypes = [0,1,2,3];
-    // Shuffle types so we can pick without duplication
-    for (var is2=insectTypes.length-1;is2>0;is2--){var is3=Math.floor(R2()*(is2+1));var ist=insectTypes[is2];insectTypes[is2]=insectTypes[is3];insectTypes[is3]=ist;}
     for (var ii=0; ii<insectCount; ii++) {
-      var insType = insectTypes[ii % insectTypes.length];
-      var insMesh = buildInsect(R2, insType);
+      var insId = Math.floor(R2() * CREATURE_DATA.length);
+      var insDef = CREATURE_DATA[insId];
+      var insMesh;
+      if (insDef.visualType === 'cloth') {
+        insMesh = buildCreature(R2);
+      } else {
+        var insVisType = parseInt(insDef.visualType.replace('insect',''));
+        insMesh = buildInsect(R2, insVisType);
+      }
       var insX = (R2()-0.5)*Math.max(2, W-4);
       var insZ = (R2()-0.5)*Math.max(2, D-4);
       insMesh.position.set(insX, 0, insZ);
       insMesh.rotation.y = R2()*Math.PI*2;
       insMesh.userData.baseY = 0;
+      insMesh.userData.creatureId = insId;
       insMesh.userData.wanderTarget.set(insX, 0, insZ);
       insMesh.userData.wanderTimer = 0.5 + Math.random() * 2.0;
       grp.add(insMesh);
-      interactables.push({ type:'creature', lx:insX, ly:0.35, lz:insZ, data:{insect:true}, mesh:insMesh });
+      interactables.push({ type:'creature', lx:insX, ly:0.35, lz:insZ, data:{insect:true, creatureId:insId}, mesh:insMesh });
     }
   }
 
@@ -4598,7 +5037,10 @@ if (!isMobile) {
     if (e.key === 's' || e.key === 'ArrowDown')   keys.s = true;
     if (e.key === 'a' || e.key === 'ArrowLeft')   keys.a = true;
     if (e.key === 'd' || e.key === 'ArrowRight')  keys.d = true;
-    if (e.key === 'Escape') document.exitPointerLock();
+    if (e.key === 'Escape') {
+      if (collectionOpen) { closeCollection(); return; }
+      document.exitPointerLock();
+    }
     // N key: next room without breaking pointer lock
     if (e.key === 'n' || e.key === 'N') {
       if (transitioning) return;
@@ -4610,6 +5052,10 @@ if (!isMobile) {
       e.preventDefault();
       if (pointerLocked) { document.exitPointerLock(); }
       else               { canvas.requestPointerLock(); }
+    }
+    if (e.key === 'z' || e.key === 'Z') {
+      if (collectionOpen) closeCollection();
+      else openCollection();
     }
   });
   document.addEventListener('keyup', function (e) {
@@ -4815,6 +5261,7 @@ function animate() {
   renderer.render(vhsScene, vhsCamera);
   updateInteractables(dt);
   updateWaterSurfaces(dt);
+  updateFadingCreatures(dt);
 }
 
 /* loading done */
