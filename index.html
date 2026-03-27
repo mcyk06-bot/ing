@@ -3321,25 +3321,52 @@ function registerInteractable(type, worldX, worldY, worldZ, data, mesh) {
   });
 }
 
+// ---- ビーム用の使い回しリソース（一度だけ生成）----
+var _beamGeo = new THREE.SphereGeometry(0.11, 10, 8);
+var _beamMat = new THREE.MeshStandardMaterial({
+  color: 0x00ccff, emissive: new THREE.Color(0x0088ff),
+  emissiveIntensity: 4.5, transparent: true, opacity: 0.90
+});
+// ライトプール（最大4発同時）
+var _beamLightPool = [];
+(function() {
+  for (var _i = 0; _i < 4; _i++) {
+    var _l = new THREE.PointLight(0x00ccff, 0, 4.0, 2.0);
+    _l.visible = false;
+    scene.add(_l);
+    _beamLightPool.push({ light: _l, inUse: false });
+  }
+})();
+
+function _acquireBeamLight() {
+  for (var i = 0; i < _beamLightPool.length; i++) {
+    if (!_beamLightPool[i].inUse) {
+      _beamLightPool[i].inUse = true;
+      _beamLightPool[i].light.visible = true;
+      _beamLightPool[i].light.intensity = 3.2;
+      return _beamLightPool[i];
+    }
+  }
+  return null; // プール枯渇時はライトなしで発射
+}
+
+function _releaseBeamLight(poolEntry) {
+  if (!poolEntry) return;
+  poolEntry.light.intensity = 0;
+  poolEntry.light.visible = false;
+  poolEntry.inUse = false;
+}
+
 function fireBeam() {
   if (transitioning) return;
-  // 捕獲ビーム: cyan projectile
-  var beamGeo = new THREE.SphereGeometry(0.11, 10, 8);
-  var beamMat = new THREE.MeshStandardMaterial({
-    color: 0x00ccff, emissive: new THREE.Color(0x0088ff),
-    emissiveIntensity: 4.5, transparent: true, opacity: 0.90
-  });
-  var beam = new THREE.Mesh(beamGeo, beamMat);
-  // Position at camera, along look direction
+  var beam = new THREE.Mesh(_beamGeo, _beamMat.clone());
   var dir = new THREE.Vector3(0, 0, -1);
   dir.applyEuler(camera.rotation);
   beam.position.copy(camera.position).addScaledVector(dir, 0.6);
   scene.add(beam);
-  // Point light on beam
-  var bpl = new THREE.PointLight(0x00ccff, 3.2, 4.0, 2.0);
-  bpl.position.copy(beam.position);
-  scene.add(bpl);
-  activeBeams.push({ mesh: beam, light: bpl, dir: dir.clone(), speed: 0.32, age: 0 });
+  var poolEntry = _acquireBeamLight();
+  if (poolEntry) poolEntry.light.position.copy(beam.position);
+  activeBeams.push({ mesh: beam, poolEntry: poolEntry, dir: dir.clone(), speed: 0.32, age: 0 });
   // Sound-like camera punch
   camera.position.addScaledVector(dir, -0.04);
 }
@@ -3358,12 +3385,12 @@ function updateInteractables(dt) {
     var b = activeBeams[bi];
     b.age += dt;
     b.mesh.position.addScaledVector(b.dir, b.speed);
-    b.light.position.copy(b.mesh.position);
+    if (b.poolEntry) b.poolEntry.light.position.copy(b.mesh.position);
     // Grow projectile slightly over time
     var scale = 1.0 + b.age * 2.4;
     b.mesh.scale.set(scale, scale, scale);
     b.mesh.material.opacity = Math.max(0, 0.88 - b.age * 0.7);
-    b.light.intensity = Math.max(0, 3.0 - b.age * 4.0);
+    if (b.poolEntry) b.poolEntry.light.intensity = Math.max(0, 3.0 - b.age * 4.0);
     // Check creature hits
     for (var ci = 0; ci < roomInteractables.length; ci++) {
       var itc = roomInteractables[ci];
@@ -3371,7 +3398,6 @@ function updateInteractables(dt) {
       var dist = b.mesh.position.distanceTo(itc.pos);
       var hitRadius = (itc.mesh && itc.mesh.userData.isInsect) ? 1.1 + scale*0.55 : 0.9 + scale*0.5;
       if (dist < hitRadius) {
-        // 捕獲！
         itc.alive = false;
         var capturedId = (itc.data && itc.data.creatureId !== undefined)
           ? itc.data.creatureId
@@ -3379,7 +3405,6 @@ function updateInteractables(dt) {
         updateCollection(capturedId);
         showCaptureNotification(capturedId);
         startFadeCapture(itc.mesh);
-        // Cyan capture flash
         var flash = new THREE.PointLight(0x00ccff, 10.0, 6.0, 2.0);
         flash.position.copy(itc.pos);
         scene.add(flash);
@@ -3388,7 +3413,7 @@ function updateInteractables(dt) {
     }
     if (b.age > 2.5 || b.mesh.material.opacity <= 0) {
       scene.remove(b.mesh);
-      scene.remove(b.light);
+      _releaseBeamLight(b.poolEntry);
       activeBeams.splice(bi, 1);
     }
   }
