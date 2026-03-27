@@ -7,106 +7,106 @@
 var CREATURE_DATA = [
   // ---- cloth 系 (霊布型) ---- 5種
   {
-    id: 0, name: 'ヴタン', type: '霊体型', element: '闇', danger: 'S',
+    id: 0, names: 'वुतन', name: 'ヴタン', type: '霊体型', element: '闇', danger: 'S',
     visualType: 'cloth',
     caption: '観測した瞬間、観測者の記憶から自らの痕跡を消去する。存在することを望まれていない。'
   },
   {
-    id: 1, name: 'プラナヴ', type: '気息型', element: '風', danger: 'A',
+    id: 1, names: 'प्रणव', name: 'プラナヴ', type: '気息型', element: '風', danger: 'A',
     visualType: 'cloth',
     caption: '呼吸リズムを周囲の生命体から少しずつ借用する。長時間の接触は危険とされる。'
   },
   {
-    id: 2, name: 'アトマン', type: '魂体型', element: '光', danger: 'S',
+    id: 2, names: 'आत्मन्', name: 'アトマン', type: '魂体型', element: '光', danger: 'S',
     visualType: 'cloth',
     caption: '固有の自己を持たず、直近に観測した存在の内側を鏡のように反射し続ける。'
   },
   {
-    id: 3, name: 'ナガーリ', type: '蛇型', element: '水', danger: 'B',
+    id: 3, names: 'नागरी', name: 'ナガーリ', type: '蛇型', element: '水', danger: 'B',
     visualType: 'cloth',
     caption: '流体のように形状が変化する。密閉容器内では完全にコンテナの形状へ適合する。'
   },
   {
-    id: 4, name: 'タトヴァ', type: '真理型', element: '無', danger: 'A',
+    id: 4, names: 'तत्त्वम्', name: 'タトヴァ', type: '真理型', element: '無', danger: 'A',
     visualType: 'cloth',
     caption: '存在と非存在の境界面に棲む。接触すると対象物の「あるべき姿」を外部に投影する。'
   },
   // ---- insect0 系 (多面核型) ---- 4種
   {
-    id: 5, name: 'アグニス', type: '炎型', element: '炎', danger: 'A',
+    id: 5, names: 'अग्निः', name: 'アグニス', type: '炎型', element: '炎', danger: 'A',
     visualType: 'insect0',
     caption: '中心核の温度は計測不能。周囲の可燃物を侵食しないが、常に白熱している。'
   },
   {
-    id: 6, name: 'ヴァイユン', type: '風型', element: '風', danger: 'C',
+    id: 6, names: 'वायुम्', name: 'ヴァイユン', type: '風型', element: '風', danger: 'C',
     visualType: 'insect0',
     caption: 'リング軌道を高速で周回する粒子群から構成される。静止状態は理論上存在しない。'
   },
   {
-    id: 7, name: 'クリシャント', type: '暗黒型', element: '闇', danger: 'S',
+    id: 7, names: 'क्रिश्चियन', name: 'クリシャント', type: '暗黒型', element: '闇', danger: 'S',
     visualType: 'insect0',
     caption: '可視光をほぼ完全に吸収する。移動経路に局所的な暗点を形成しながら進む。'
   },
   {
-    id: 8, name: 'インドラス', type: '雷電型', element: '空', danger: 'A',
+    id: 8, names: 'इन्द्रः', name: 'インドラス', type: '雷電型', element: '空', danger: 'A',
     visualType: 'insect0',
     caption: '内蔵する粒子が高度に帯電している。近接すると電子機器に重篤な誤作動が生じる。'
   },
   // ---- insect1 系 (半透明殻型) ---- 4種
   {
-    id: 9, name: 'ジャランダ', type: '水型', element: '水', danger: 'B',
+    id: 9, names: 'जालण्डा', name: 'ジャランダ', type: '水型', element: '水', danger: 'B',
     visualType: 'insect1',
     caption: '半透明の外殻内部に不明な何かが浮遊している。それは常に観測者の死角に位置する。'
   },
   {
-    id: 10, name: 'プリトヴィ', type: '土型', element: '土', danger: 'B',
+    id: 10, names: 'पृथ्वी', name: 'プリトヴィ', type: '土型', element: '土', danger: 'B',
     visualType: 'insect1',
     caption: '脊椎状構造に沿って鉱物結晶が成長する。移動経路に微量の希少鉱物を析出する。'
   },
   {
-    id: 11, name: 'カーシャン', type: '空間型', element: '空', danger: 'S',
+    id: 11, names: 'कर्षण', name: 'カーシャン', type: '空間型', element: '空', danger: 'S',
     visualType: 'insect1',
     caption: '位置情報が量子的に不安定。複数の座標に同時存在する可能性が実験的に示唆されている。'
   },
   {
-    id: 12, name: 'ソーマン', type: '月光型', element: '光', danger: 'C',
+    id: 12, names: 'सोमन', name: 'ソーマン', type: '月光型', element: '光', danger: 'C',
     visualType: 'insect1',
     caption: '月齢と連動して活動量が変化する。新月には完全に静止することが繰り返し観測されている。'
   },
   // ---- insect2 系 (多面堆積型) ---- 4種
   {
-    id: 13, name: 'カーラン', type: '時間型', element: '時', danger: 'S',
+    id: 13, names: 'कार्लन्', name: 'カーラン', type: '時間型', element: '時', danger: 'S',
     visualType: 'insect2',
     caption: '接触した物体の時間軸を局所的に歪める。捕獲記録の日時は常に矛盾を示す。'
   },
   {
-    id: 14, name: 'マーヤン', type: '幻影型', element: '幻', danger: 'A',
+    id: 14, names: 'मायन', name: 'マーヤン', type: '幻影型', element: '幻', danger: 'A',
     visualType: 'insect2',
     caption: '視認できる形状はすべて偽装である。真の外観についての解析は現在も未完了。'
   },
   {
-    id: 15, name: 'ブラヴァン', type: '無限型', element: '無', danger: 'S',
+    id: 15, names: 'ब्रावन्ट्', name: 'ブラヴァン', type: '無限型', element: '無', danger: 'S',
     visualType: 'insect2',
     caption: '個体数の上限が存在しない。観測するたびに確認される総個体数が増加している。'
   },
   {
-    id: 16, name: 'ダルヴァン', type: '秩序型', element: '土', danger: 'C',
+    id: 16, names: 'दरवाण', name: 'ダルヴァン', type: '秩序型', element: '土', danger: 'C',
     visualType: 'insect2',
     caption: '移動軌跡が完璧な幾何学パターンに従う。いかなる行動にもランダム性が観測されない。'
   },
   // ---- insect3 系 (環冠型) ---- 3種
   {
-    id: 17, name: 'ヴィシュナ', type: '浸透型', element: '光', danger: 'A',
+    id: 17, names: 'विष्णा', name: 'ヴィシュナ', type: '浸透型', element: '光', danger: 'A',
     visualType: 'insect3',
     caption: '物質の分子間隙を自由に通過する。捕獲容器の素材選定には特別な注意が必要とされる。'
   },
   {
-    id: 18, name: 'シヴァーン', type: '変容型', element: '炎', danger: 'S',
+    id: 18, names: 'शिवन', name: 'シヴァーン', type: '変容型', element: '炎', danger: 'S',
     visualType: 'insect3',
     caption: 'クラウン構造が高速で崩壊と再生を繰り返す。エネルギー収支が熱力学則に従わない。'
   },
   {
-    id: 19, name: 'ヤマーン', type: '境界型', element: '時', danger: 'B',
+    id: 19, names: 'यमन', name: 'ヤマーン', type: '境界型', element: '時', danger: 'B',
     visualType: 'insect3',
     caption: '生体の境界線付近に出没する。直接的な害はないが、接近時に周囲温度が2°C低下する。'
   }
