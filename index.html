@@ -4235,8 +4235,8 @@ var PALETTES = [
   { wr:200,wg:222,wb:210, fr:40,fg:80,fb:60,  lc:0xb0ffd8, li:1.9, ac:0x90ffcc, ai:0.14 },
   { wr:238,wg:216,wb:196, fr:118,fg:60,fb:30, lc:0xff9030, li:2.3, ac:0xff7010, ai:0.17 },
   { wr:206,wg:206,wb:212, fr:170,fg:170,fb:180, lc:0xd8e4ff, li:1.7, ac:0xd0daff, ai:0.12 },
-  { wr:22, wg:10, wb:10,  fr:48,fg:14,fb:14,  lc:0xff2010, li:2.8, ac:0xee0000, ai:0.07 },
-  { wr:8,  wg:8,  wb:8,   fr:14,fg:14,fb:14,  lc:0xffffff, li:2.3, ac:0xffffff, ai:0.09 },
+  { wr:22, wg:10, wb:10,  fr:48,fg:14,fb:14,  lc:0xff2010, li:2.8, ac:0xee0000, ai:0.20 },
+  { wr:8,  wg:8,  wb:8,   fr:14,fg:14,fb:14,  lc:0xffffff, li:2.3, ac:0xffffff, ai:0.22 },
   { wr:220,wg:224,wb:200, fr:70,fg:84,fb:50,  lc:0xdeff60, li:1.9, ac:0xceff40, ai:0.14 },
   { wr:222,wg:206,wb:230, fr:76,fg:46,fb:96,  lc:0xcc60ff, li:2.1, ac:0xbb40ff, ai:0.12 },
   { wr:196,wg:226,wb:230, fr:36,fg:86,fb:100, lc:0x30ddff, li:2.0, ac:0x10ccff, ai:0.14 },
@@ -4587,8 +4587,8 @@ function buildRoom(seed) {
     else { W=16+R2()*36; D=22+R2()*62; H=5+R2()*9; }
   }
   var hw = W/2, hd = D/2;
-  var fogNear = isMega ? 20+R2()*20 : (shapeType==='narrow'?4:12);
-  var fogFar  = isMega ? D*0.8+40 : (shapeType==='narrow'?20:90);
+  var fogNear = isMega ? 20+R2()*20 : (shapeType==='narrow'?6:12);
+  var fogFar  = isMega ? D*0.8+40 : (shapeType==='narrow'?28:90);
 
   var DOOR_W = 2.1+R2()*0.7, DOOR_H = 2.5+R2()*0.6;
   var pal = PALETTES[Math.floor(R2() * PALETTES.length)];
@@ -4761,16 +4761,24 @@ function buildRoom(seed) {
 
   // ---- lighting ----
   // Guarantee a minimum ambient so dark-palette rooms stay navigable
-  var minAmbInt = 0.18;
+  var minAmbInt = 0.26;
   var amb = new THREE.AmbientLight(pal.ac, Math.max(minAmbInt, pal.ai));
   grp.add(amb);
-  // Extra dim white fill so pitch-black rooms always have some definition
-  var fill = new THREE.AmbientLight(0xffffff, 0.06);
+  // 最低光度保証: 純白フィルで真っ暗なパレットの部屋でも輪郭が見える
+  var fill = new THREE.AmbientLight(0xffffff, 0.12);
   grp.add(fill);
   if (shapeType==='dome'||shapeType==='cylinder') {
     // Central point light for round rooms
     var cpl = new THREE.PointLight(pal.lc, pal.li*1.2, H*3, 1.5);
     cpl.position.set(0, H*0.65, 0); grp.add(cpl);
+    // dome/cylinder は SpotLight がないので補助ライトを4点追加
+    var R = (shapeType==='dome') ? (W*0.5) : hw;
+    var domeOffsets = [[R*0.55,0],[- R*0.55,0],[0,R*0.55],[0,-R*0.55]];
+    for (var _di=0; _di<domeOffsets.length; _di++) {
+      var dpl = new THREE.PointLight(pal.lc, pal.li*0.7, H*2.2, 1.8);
+      dpl.position.set(domeOffsets[_di][0], H*0.6, domeOffsets[_di][1]);
+      grp.add(dpl);
+    }
   } else {
     var rows = Math.min(Math.ceil(D/8), isMega?4:2);
     var cols2 = Math.min(Math.ceil(W/8), isMega?4:2);
@@ -4811,6 +4819,18 @@ function buildRoom(seed) {
           shaftAdded++;
         }
       }
+    }
+  }
+
+  // ---- cave補助ライト: 不規則な壁で影ができやすいため低いPointLightを分散配置 ----
+  if (shapeType === 'cave') {
+    var caveN = 4;
+    for (var _cvi = 0; _cvi < caveN; _cvi++) {
+      var _cvx = (R2() - 0.5) * W * 0.7;
+      var _cvz = (R2() - 0.5) * D * 0.7;
+      var _cvl = new THREE.PointLight(pal.lc, pal.li * 0.55, Math.max(W, D) * 0.45, 1.8);
+      _cvl.position.set(_cvx, 0.8, _cvz);
+      grp.add(_cvl);
     }
   }
 
