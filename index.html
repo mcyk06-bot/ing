@@ -94,6 +94,117 @@ canvas.locked{cursor:none}
   pointer-events:none;z-index:500;
   transition:opacity 0.35s ease
 }
+
+/* ---- タイトル画面 ---- */
+#title-screen{
+  position:fixed;inset:0;
+  background:#000;
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  z-index:1100;gap:0;
+  opacity:0;pointer-events:none;
+  transition:opacity 1.2s
+}
+#title-screen.visible{opacity:1;pointer-events:auto}
+#title-screen.fade-out{opacity:0;pointer-events:none}
+#title-logo{
+  font-family:'Helvetica Neue',Arial,sans-serif;
+  font-size:clamp(32px,8vw,64px);
+  font-weight:200;
+  letter-spacing:0.18em;
+  color:rgba(255,255,255,0.88);
+  margin-bottom:10px;
+  position:relative;
+  text-shadow:0 0 40px rgba(255,255,255,0.15)
+}
+#title-logo .inf{
+  display:inline-block;
+  font-size:1.15em;
+  line-height:1;
+  vertical-align:middle;
+  margin-right:0.12em;
+  opacity:0.7;
+  animation:titleInfSpin 8s linear infinite
+}
+@keyframes titleInfSpin{
+  0%{opacity:0.5;transform:scaleX(1)}
+  50%{opacity:0.9;transform:scaleX(-1)}
+  100%{opacity:0.5;transform:scaleX(1)}
+}
+#title-sub{
+  font-family:'Helvetica Neue',sans-serif;
+  font-size:9px;letter-spacing:0.65em;
+  color:rgba(255,255,255,0.22);
+  margin-bottom:72px;
+  text-transform:uppercase
+}
+.title-btn{
+  background:none;
+  border:none;
+  border-bottom:1px solid rgba(255,255,255,0.15);
+  color:rgba(255,255,255,0.55);
+  font-family:'Helvetica Neue',sans-serif;
+  font-size:11px;letter-spacing:0.55em;
+  padding:16px 40px 14px;
+  cursor:pointer;
+  margin:6px 0;
+  width:260px;
+  text-align:center;
+  transition:color 0.25s,border-color 0.25s,background 0.25s;
+  -webkit-tap-highlight-color:transparent;
+  position:relative;
+  overflow:hidden
+}
+.title-btn::before{
+  content:'';
+  position:absolute;inset:0;
+  background:rgba(255,255,255,0);
+  transition:background 0.2s
+}
+.title-btn:hover{
+  color:rgba(255,255,255,0.95);
+  border-color:rgba(255,255,255,0.45)
+}
+.title-btn:hover::before{background:rgba(255,255,255,0.04)}
+.title-btn:active{color:rgba(255,255,255,1)}
+#title-btn-new{margin-top:0}
+#title-btn-continue{color:rgba(255,255,255,0.30)}
+#title-btn-continue .continue-count{
+  display:block;font-size:8px;
+  letter-spacing:0.4em;
+  color:rgba(100,180,255,0.45);
+  margin-top:4px
+}
+#title-deco{
+  position:absolute;
+  top:50%;left:50%;
+  width:340px;height:340px;
+  transform:translate(-50%,-50%);
+  border:1px solid rgba(255,255,255,0.04);
+  border-radius:50%;
+  animation:titleDecoRot 18s linear infinite;
+  pointer-events:none
+}
+#title-deco2{
+  position:absolute;
+  top:50%;left:50%;
+  width:480px;height:480px;
+  transform:translate(-50%,-50%);
+  border:1px solid rgba(255,255,255,0.025);
+  border-radius:50%;
+  animation:titleDecoRot 28s linear infinite reverse;
+  pointer-events:none
+}
+@keyframes titleDecoRot{
+  from{transform:translate(-50%,-50%) rotate(0deg)}
+  to{transform:translate(-50%,-50%) rotate(360deg)}
+}
+#title-version{
+  position:absolute;bottom:28px;
+  font-family:'Helvetica Neue',sans-serif;
+  font-size:8px;letter-spacing:0.5em;
+  color:rgba(255,255,255,0.1)
+}
 #next-room-btn{
   position:fixed;bottom:32px;right:24px;
   z-index:150;
@@ -336,6 +447,18 @@ canvas.locked{cursor:none}
 <div id="loading">
   <div id="loading-text">LOADING</div>
   <div id="progress-bar"><div id="progress-fill"></div></div>
+</div>
+<div id="title-screen">
+  <div id="title-deco"></div>
+  <div id="title-deco2"></div>
+  <div id="title-logo"><span class="inf">∞</span>Gallery</div>
+  <div id="title-sub">infinite exhibition</div>
+  <button class="title-btn" id="title-btn-new">はじめから</button>
+  <button class="title-btn" id="title-btn-continue">
+    つづきから
+    <span class="continue-count" id="continue-count-label"></span>
+  </button>
+  <div id="title-version">v2.0</div>
 </div>
 <canvas id="canvas"></canvas>
 <div id="room-info">ROOM 001</div>
@@ -5066,11 +5189,66 @@ function animate() {
   }
 }
 
-/* loading done */
+/* ----------------------------------------------------------
+   Title screen
+---------------------------------------------------------- */
+var titleScreenEl     = document.getElementById('title-screen');
+var titleBtnNew       = document.getElementById('title-btn-new');
+var titleBtnContinue  = document.getElementById('title-btn-continue');
+var continueCountLabel = document.getElementById('continue-count-label');
+
+function showTitleScreen() {
+  // 継続データがあれば捕獲数を表示
+  var total = getTotalCaptured();
+  if (total > 0) {
+    continueCountLabel.textContent = total + ' 種捕獲済み';
+    titleBtnContinue.style.color = 'rgba(255,255,255,0.55)';
+  } else {
+    continueCountLabel.textContent = 'データなし';
+    titleBtnContinue.style.color = 'rgba(255,255,255,0.22)';
+    titleBtnContinue.style.cursor = 'default';
+  }
+  titleScreenEl.classList.add('visible');
+}
+
+function startGame() {
+  titleScreenEl.classList.add('fade-out');
+  setTimeout(function() { titleScreenEl.style.display = 'none'; }, 1300);
+}
+
+titleBtnNew.addEventListener('click', function() {
+  // 図鑑リセット
+  capturedCollection = {};
+  saveCollection();
+  // UI更新（コレクションカウント）
+  collectionCount.textContent = '0 / ' + CREATURE_DATA.length + ' 発見済み';
+  startGame();
+});
+titleBtnNew.addEventListener('touchend', function(e) {
+  e.preventDefault();
+  capturedCollection = {};
+  saveCollection();
+  collectionCount.textContent = '0 / ' + CREATURE_DATA.length + ' 発見済み';
+  startGame();
+}, {passive:false});
+
+titleBtnContinue.addEventListener('click', function() {
+  // データそのままで開始
+  startGame();
+});
+titleBtnContinue.addEventListener('touchend', function(e) {
+  e.preventDefault();
+  startGame();
+}, {passive:false});
+
+/* loading done → show title */
 setProgress(100);
 setTimeout(function () {
   loadingEl.classList.add('fade');
-  setTimeout(function () { loadingEl.style.display = 'none'; }, 1500);
+  setTimeout(function () {
+    loadingEl.style.display = 'none';
+    showTitleScreen();
+  }, 1500);
 }, 600);
 
 animate();
