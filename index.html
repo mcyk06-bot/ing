@@ -79,6 +79,25 @@ canvas.locked{cursor:none}
   letter-spacing:0.6em;
   font-family:'Helvetica Neue',sans-serif
 }
+#loading-error{
+  display:none;
+  flex-direction:column;align-items:center;gap:16px
+}
+#loading-error-msg{
+  color:rgba(255,80,80,0.7);font-size:9px;
+  letter-spacing:0.5em;
+  font-family:'Helvetica Neue',sans-serif
+}
+#reload-btn{
+  background:none;
+  border:1px solid rgba(255,255,255,0.25);
+  color:rgba(255,255,255,0.6);
+  font-size:9px;letter-spacing:0.5em;
+  font-family:'Helvetica Neue',sans-serif;
+  padding:10px 28px;cursor:pointer;
+  transition:border-color 0.2s,color 0.2s
+}
+#reload-btn:hover{border-color:rgba(255,255,255,0.6);color:rgba(255,255,255,0.9)}
 #progress-bar{
   width:180px;height:1px;
   background:rgba(255,255,255,0.08)
@@ -447,6 +466,10 @@ canvas.locked{cursor:none}
 <div id="loading">
   <div id="loading-text">LOADING</div>
   <div id="progress-bar"><div id="progress-fill"></div></div>
+  <div id="loading-error">
+    <div id="loading-error-msg">LOAD FAILED</div>
+    <button id="reload-btn" onclick="location.reload()">RELOAD</button>
+  </div>
 </div>
 <div id="title-screen">
   <div id="title-deco"></div>
@@ -483,9 +506,34 @@ canvas.locked{cursor:none}
   </div>
   <div id="collection-grid"></div>
 </div>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="creatures.js"></script>
-<script src="creatures3D.js"></script>
+<script>
+// ウォッチドッグ: 12秒以内にロード完了しなければエラー表示
+window._loadWatchdog = setTimeout(function() {
+  var le = document.getElementById('loading-error');
+  var lt = document.getElementById('loading-text');
+  var pb = document.getElementById('progress-bar');
+  if (le) { le.style.display = 'flex'; }
+  if (lt) { lt.style.display = 'none'; }
+  if (pb) { pb.style.display = 'none'; }
+}, 12000);
+window.onerror = function(msg, src, line, col, err) {
+  clearTimeout(window._loadWatchdog);
+  var le = document.getElementById('loading-error');
+  var lt = document.getElementById('loading-text');
+  var pb = document.getElementById('progress-bar');
+  if (le && le.style.display !== 'flex') {
+    le.style.display = 'flex';
+    if (lt) lt.style.display = 'none';
+    if (pb) pb.style.display = 'none';
+  }
+};
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"
+  onerror="document.getElementById('loading-error').style.display='flex';document.getElementById('loading-text').style.display='none';document.getElementById('progress-bar').style.display='none'"></script>
+<script src="creatures.js"
+  onerror="document.getElementById('loading-error').style.display='flex';document.getElementById('loading-text').style.display='none';document.getElementById('progress-bar').style.display='none'"></script>
+<script src="creatures3D.js"
+  onerror="document.getElementById('loading-error').style.display='flex';document.getElementById('loading-text').style.display='none';document.getElementById('progress-bar').style.display='none'"></script>
 <script>
 'use strict';
 /* globals THREE */
@@ -4864,19 +4912,10 @@ function checkDoorHint() {
 }
 
 /* ----------------------------------------------------------
-   Init scene
+   Init scene  （非同期化でプログレスバーを実際に更新させる）
 ---------------------------------------------------------- */
-setProgress(20);
-currentRoom = spawnRoom(Math.floor(Math.random() * 99991) + 1);
-
-// --- 新規追加: 初期のフォグ適用 ---
-scene.fog.near = currentRoom.fogNear;
-scene.fog.far  = currentRoom.fogFar;
-// ----------------------------------
-
-setProgress(80);
-camera.position.set(0, 1.72, currentRoom.hd - 2.5);
 camera.rotation.order = 'YXZ';
+setProgress(20);
 
 /* ----------------------------------------------------------
    Device detection
@@ -5190,6 +5229,36 @@ function animate() {
 }
 
 /* ----------------------------------------------------------
+   Async init: spawnRoom を rAF 後に実行してプログレスバーを描画させる
+---------------------------------------------------------- */
+requestAnimationFrame(function() {
+  requestAnimationFrame(function() {
+    try {
+      currentRoom = spawnRoom(Math.floor(Math.random() * 99991) + 1);
+      scene.fog.near = currentRoom.fogNear;
+      scene.fog.far  = currentRoom.fogFar;
+      camera.position.set(0, 1.72, currentRoom.hd - 2.5);
+    } catch(e) {
+      console.error('[init] spawnRoom failed:', e);
+    }
+    setProgress(80);
+    requestAnimationFrame(function() {
+      setProgress(100);
+      animate();
+      // ロード完了 → ウォッチドッグ解除
+      clearTimeout(window._loadWatchdog);
+      setTimeout(function () {
+        loadingEl.classList.add('fade');
+        setTimeout(function () {
+          loadingEl.style.display = 'none';
+          showTitleScreen();
+        }, 1500);
+      }, 600);
+    });
+  });
+});
+
+/* ----------------------------------------------------------
    Title screen
 ---------------------------------------------------------- */
 var titleScreenEl     = document.getElementById('title-screen');
@@ -5241,17 +5310,7 @@ titleBtnContinue.addEventListener('touchend', function(e) {
   startGame();
 }, {passive:false});
 
-/* loading done → show title */
-setProgress(100);
-setTimeout(function () {
-  loadingEl.classList.add('fade');
-  setTimeout(function () {
-    loadingEl.style.display = 'none';
-    showTitleScreen();
-  }, 1500);
-}, 600);
 
-animate();
 </script>
 </body>
 </html>
