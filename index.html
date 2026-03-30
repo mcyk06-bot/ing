@@ -3169,6 +3169,7 @@ function buildMemoNote(R2) {
 // ============================================================
 var roomInteractables = [];  // { type, worldPos, data, mesh, alive }
 var activeBeams = [];        // { mesh, dir, speed, age }
+var _lockedCreatures = [];   // テザー捕獲中のクリーチャー
 var activeWaterSurfaces = []; // { rippleCv, rippleCx, rippleTex, causticLight, spouts, phase, sources }
 
 var memoPopupEl   = document.getElementById('memo-popup');
@@ -3180,6 +3181,12 @@ function clearInteractables() {
   roomInteractables = [];
   activeBeams = [];
   activeWaterSurfaces = [];
+  // ロック中クリーチャーのテザー・ライトを解放
+  for (var _cli = 0; _cli < _lockedCreatures.length; _cli++) {
+    _releaseTether(_lockedCreatures[_cli].tetherEntry);
+    _releaseBeamLight(_lockedCreatures[_cli].lightEntry);
+  }
+  _lockedCreatures = [];
   memoPopupEl.classList.remove('visible');
   memoLabelEl.classList.remove('visible');
   shootBtnEl.classList.remove('visible');
@@ -3196,29 +3203,53 @@ function registerInteractable(type, worldX, worldY, worldZ, data, mesh) {
   });
 }
 
-// ---- ビーム用の使い回しリソース（一度だけ生成）----
-var _beamGeo = new THREE.SphereGeometry(0.11, 10, 8);
+// ================================================================
+//  捕獲ビームシステム（ゴーストバスターズ方式）
+//  Phase 1: 弾丸が飛ぶ
+//  Phase 2: 命中 → クリーチャーをロック、テザーで引き寄せ
+//  Phase 3: 十分近づいたら「ぴゅん」と捕獲完了
+// ================================================================
+
+// ---- 弾丸ジオメトリ・マテリアル（使い回し）----
+var _beamGeo = new THREE.SphereGeometry(0.09, 8, 6);
 var _beamMat = new THREE.MeshStandardMaterial({
-  color: 0x00ccff, emissive: new THREE.Color(0x0088ff),
-  emissiveIntensity: 4.5, transparent: true, opacity: 0.90
+  color: 0x00eeff, emissive: new THREE.Color(0x00aaff),
+  emissiveIntensity: 5.0, transparent: true, opacity: 0.92
 });
-// ライトプール（最大4発同時）
+
+// ---- ライトプール（弾丸用 4 + フラッシュ用 4）----
 var _beamLightPool = [];
-// フラッシュライトプール（命中エフェクト用 — scene.add/removeを避けるため事前生成）
 var _flashLightPool = [];
+
+// ---- テザーライン プール（使い回しで scene.add 回数を最小化）----
+var _tetherPool = [];
+
 (function() {
-  for (var _i = 0; _i < 4; _i++) {
-    var _l = new THREE.PointLight(0x00ccff, 0, 4.0, 2.0);
-    _l.visible = false;
-    scene.add(_l);
-    _beamLightPool.push({ light: _l, inUse: false });
+  var i;
+  // 弾丸ライト
+  for (i = 0; i < 4; i++) {
+    var bl = new THREE.PointLight(0x00eeff, 0, 5.0, 2.0);
+    bl.visible = false; scene.add(bl);
+    _beamLightPool.push({ light: bl, inUse: false });
   }
-  // フラッシュ用ライトも事前にシーンへ追加（ライト数変動によるシェーダー再コンパイルを防止）
-  for (var _j = 0; _j < 4; _j++) {
-    var _fl = new THREE.PointLight(0x00ccff, 0, 6.0, 2.0);
-    _fl.visible = false;
-    scene.add(_fl);
-    _flashLightPool.push({ light: _fl, age: 0, duration: 0, inUse: false });
+  // フラッシュライト
+  for (i = 0; i < 4; i++) {
+    var fl = new THREE.PointLight(0x00eeff, 0, 7.0, 2.0);
+    fl.visible = false; scene.add(fl);
+    _flashLightPool.push({ light: fl, age: 0, duration: 0, inUse: false });
+  }
+  // テザーライン（LineBasicMaterial なので追加シェーダーなし）
+  for (i = 0; i < 4; i++) {
+    var pts = [new THREE.Vector3(), new THREE.Vector3()];
+    var tGeo = new THREE.BufferGeometry().setFromPoints(pts);
+    var tMat = new THREE.LineBasicMaterial({
+      color: 0x00ddff, transparent: true, opacity: 0.0
+    });
+    var tLine = new THREE.Line(tGeo, tMat);
+    tLine.visible = false;
+    tLine.frustumCulled = false;
+    scene.add(tLine);
+    _tetherPool.push({ line: tLine, geo: tGeo, mat: tMat, inUse: false });
   }
 })();
 
@@ -3227,32 +3258,191 @@ function _acquireBeamLight() {
     if (!_beamLightPool[i].inUse) {
       _beamLightPool[i].inUse = true;
       _beamLightPool[i].light.visible = true;
-      _beamLightPool[i].light.intensity = 3.2;
+      _beamLightPool[i].light.intensity = 3.5;
       return _beamLightPool[i];
     }
   }
-  return null; // プール枯渇時はライトなしで発射
+  return null;
+}
+function _releaseBeamLight(pe) {
+  if (!pe) return;
+  pe.light.intensity = 0; pe.light.visible = false; pe.inUse = false;
+}
+function _acquireTether() {
+  for (var i = 0; i < _tetherPool.length; i++) {
+    if (!_tetherPool[i].inUse) {
+      _tetherPool[i].inUse = true;
+      _tetherPool[i].line.visible = true;
+      _tetherPool[i].mat.opacity = 0.0;
+      return _tetherPool[i];
+    }
+  }
+  return null;
+}
+function _releaseTether(te) {
+  if (!te) return;
+  te.line.visible = false; te.mat.opacity = 0.0; te.inUse = false;
 }
 
-function _releaseBeamLight(poolEntry) {
-  if (!poolEntry) return;
-  poolEntry.light.intensity = 0;
-  poolEntry.light.visible = false;
-  poolEntry.inUse = false;
+// テザーライン頂点更新（毎フレーム呼ぶ）
+function _updateTetherLine(te, from, to) {
+  var pos = te.geo.attributes.position;
+  pos.setXYZ(0, from.x, from.y, from.z);
+  pos.setXYZ(1, to.x,   to.y,   to.z);
+  pos.needsUpdate = true;
+}
+
+// ---- 捕獲中クリーチャー管理 ----
+// 各エントリ: { itc, tetherEntry, beamLightEntry, age, startPos, jitterAcc }
+
+function _lockCreature(itc) {
+  // すでにロック済みなら無視
+  if (itc.locked) return;
+  itc.locked = true;
+  itc.alive  = false; // 他のビームに狙われなくする
+
+  var te  = _acquireTether();
+  var ble = _acquireBeamLight();
+
+  _lockedCreatures.push({
+    itc:        itc,
+    tetherEntry:te,
+    lightEntry: ble,
+    age:        0,
+    startDist:  itc.pos.distanceTo(camera.position),
+    jitterX:    0,
+    jitterY:    0,
+    jitterZ:    0,
+    jitterAcc:  0   // ジッター蓄積タイマー
+  });
+}
+
+function _finishCapture(lc) {
+  var itc = lc.itc;
+  // テザー・ライト解放
+  _releaseTether(lc.tetherEntry);
+  if (lc.lightEntry) _releaseBeamLight(lc.lightEntry);
+
+  // 捕獲フラッシュ（プールから）
+  for (var fi = 0; fi < _flashLightPool.length; fi++) {
+    if (!_flashLightPool[fi].inUse) {
+      var fp = _flashLightPool[fi];
+      fp.light.position.copy(itc.pos);
+      fp.light.intensity = 14.0;
+      fp.light.visible = true;
+      fp.inUse = true; fp.age = 0; fp.duration = 0.45;
+      break;
+    }
+  }
+
+  // クリーチャーを即消し（ぴゅん）
+  if (itc.mesh && itc.mesh.parent) itc.mesh.parent.remove(itc.mesh);
+  else if (itc.mesh) scene.remove(itc.mesh);
+
+  // 図鑑登録 & 通知
+  var capturedId = (itc.data && itc.data.creatureId !== undefined)
+    ? itc.data.creatureId
+    : Math.floor(Math.random() * CREATURE_DATA.length);
+  updateCollection(capturedId);
+  showCaptureNotification(capturedId);
+}
+
+// ロック中クリーチャーを毎フレーム更新
+function updateLockedCreatures(dt) {
+  for (var li = _lockedCreatures.length - 1; li >= 0; li--) {
+    var lc = _lockedCreatures[li];
+    lc.age += dt;
+
+    var itc = lc.itc;
+    var camPos = camera.position;
+
+    // ── びびびびび：高速ジッター ──
+    lc.jitterAcc += dt;
+    // 1フレーム約16msで更新（過密更新を避ける）
+    if (lc.jitterAcc > 0.025) {
+      lc.jitterAcc = 0;
+      var jAmp = 0.06 + Math.min(0.14, lc.age * 0.04); // 時間とともに激しく
+      lc.jitterX = (Math.random() - 0.5) * jAmp * 2;
+      lc.jitterY = (Math.random() - 0.5) * jAmp;
+      lc.jitterZ = (Math.random() - 0.5) * jAmp * 2;
+    }
+
+    // ── プレイヤーへ引き寄せ（加速度付き）──
+    var dist = itc.pos.distanceTo(camPos);
+    // 引き寄せ速度：近づくほど加速（ぴゅん感）
+    var pullT     = Math.min(1.0, lc.age / 1.8);
+    var pullSpeed = (0.04 + pullT * pullT * 0.28) * dt * 60;
+    var toDirX = camPos.x - itc.pos.x;
+    var toDirY = (camPos.y - 0.4) - itc.pos.y;
+    var toDirZ = camPos.z - itc.pos.z;
+    var toDirLen = Math.sqrt(toDirX*toDirX + toDirY*toDirY + toDirZ*toDirZ);
+    if (toDirLen > 0.01) {
+      itc.pos.x += (toDirX / toDirLen) * pullSpeed;
+      itc.pos.y += (toDirY / toDirLen) * pullSpeed;
+      itc.pos.z += (toDirZ / toDirLen) * pullSpeed;
+    }
+
+    // メッシュ位置 = 引き寄せ位置 + ジッター
+    if (itc.mesh) {
+      itc.mesh.position.set(
+        itc.pos.x + lc.jitterX,
+        itc.pos.y + lc.jitterY,
+        itc.pos.z + lc.jitterZ
+      );
+      // 回転もジッター（抵抗感）
+      itc.mesh.rotation.y += (Math.random() - 0.5) * 0.25;
+      itc.mesh.rotation.z  = (Math.random() - 0.5) * 0.18;
+    }
+
+    // ── テザーライン更新 ──
+    if (lc.tetherEntry) {
+      // ラインを「手元少し前」からクリーチャーへ
+      var gunPos = camPos.clone().addScaledVector(
+        new THREE.Vector3(0,0,-1).applyEuler(camera.rotation), 0.5
+      );
+      gunPos.y -= 0.15;
+      _updateTetherLine(lc.tetherEntry, gunPos, itc.pos);
+
+      // テザー透明度：フェードイン → 引き終わりでフェードアウト
+      var tetherAlpha;
+      if (lc.age < 0.12) {
+        tetherAlpha = lc.age / 0.12;
+      } else if (dist < 1.8) {
+        tetherAlpha = Math.max(0, dist / 1.8);
+      } else {
+        // びびびびとちらつかせる
+        tetherAlpha = 0.55 + Math.sin(lc.age * 48.0) * 0.35;
+      }
+      lc.tetherEntry.mat.opacity = tetherAlpha * 0.85;
+    }
+
+    // ── ビーム伴走ライト ──
+    if (lc.lightEntry) {
+      lc.lightEntry.light.position.copy(itc.pos);
+      // プラズマライトもびびびびと明滅
+      lc.lightEntry.light.intensity = 2.5 + Math.sin(lc.age * 55.0) * 1.8;
+    }
+
+    // ── 捕獲完了判定 ──
+    if (dist < 0.9 || lc.age > 3.5) {
+      _finishCapture(lc);
+      _lockedCreatures.splice(li, 1);
+    }
+  }
 }
 
 function fireBeam() {
   if (transitioning) return;
   var beam = new THREE.Mesh(_beamGeo, _beamMat.clone());
-  var dir = new THREE.Vector3(0, 0, -1);
+  var dir  = new THREE.Vector3(0, 0, -1);
   dir.applyEuler(camera.rotation);
-  beam.position.copy(camera.position).addScaledVector(dir, 0.6);
+  beam.position.copy(camera.position).addScaledVector(dir, 0.55);
   scene.add(beam);
   var poolEntry = _acquireBeamLight();
   if (poolEntry) poolEntry.light.position.copy(beam.position);
-  activeBeams.push({ mesh: beam, poolEntry: poolEntry, dir: dir.clone(), speed: 0.32, age: 0 });
-  // Sound-like camera punch
-  camera.position.addScaledVector(dir, -0.04);
+  activeBeams.push({ mesh: beam, poolEntry: poolEntry, dir: dir.clone(), speed: 0.30, age: 0 });
+  // 発射反動
+  camera.position.addScaledVector(dir, -0.035);
 }
 
 shootBtnEl.addEventListener('click', fireBeam);
@@ -3264,52 +3454,49 @@ function updateInteractables(dt) {
   var showMemo = false, showMemoText = '';
   var showShoot = false;
 
-  // Update beams
+  // ── 弾丸フェーズ更新 ──
   for (var bi = activeBeams.length - 1; bi >= 0; bi--) {
     var b = activeBeams[bi];
     b.age += dt;
     b.mesh.position.addScaledVector(b.dir, b.speed);
     if (b.poolEntry) b.poolEntry.light.position.copy(b.mesh.position);
-    // Grow projectile slightly over time
-    var scale = 1.0 + b.age * 2.4;
+
+    // 弾丸は小さくシャープに（膨らみすぎない）
+    var scale = 1.0 + b.age * 1.2;
     b.mesh.scale.set(scale, scale, scale);
-    b.mesh.material.opacity = Math.max(0, 0.88 - b.age * 0.7);
-    if (b.poolEntry) b.poolEntry.light.intensity = Math.max(0, 3.0 - b.age * 4.0);
-    // Check creature hits
+    b.mesh.material.opacity = Math.max(0, 0.90 - b.age * 0.65);
+    if (b.poolEntry) b.poolEntry.light.intensity = Math.max(0, 3.5 - b.age * 4.5);
+
+    var hitOccurred = false;
+    // 命中判定
     for (var ci = 0; ci < roomInteractables.length; ci++) {
       var itc = roomInteractables[ci];
-      if (itc.type !== 'creature' || !itc.alive) continue;
+      if (itc.type !== 'creature' || !itc.alive || itc.locked) continue;
       var dist = b.mesh.position.distanceTo(itc.pos);
-      var hitRadius = (itc.mesh && itc.mesh.userData.isInsect) ? 1.1 + scale*0.55 : 0.9 + scale*0.5;
+      var hitRadius = (itc.mesh && itc.mesh.userData.isInsect) ? 1.0 + scale*0.4 : 0.85 + scale*0.35;
       if (dist < hitRadius) {
-        itc.alive = false;
-        var capturedId = (itc.data && itc.data.creatureId !== undefined)
-          ? itc.data.creatureId
-          : Math.floor(Math.random() * CREATURE_DATA.length);
-        updateCollection(capturedId);
-        showCaptureNotification(capturedId);
-        startFadeCapture(itc.mesh);
-        // フラッシュライトをプールから取得（scene.add/removeなし→シェーダー再コンパイルなし）
-        for (var _fi = 0; _fi < _flashLightPool.length; _fi++) {
-          if (!_flashLightPool[_fi].inUse) {
-            var _fp = _flashLightPool[_fi];
-            _fp.light.position.copy(itc.pos);
-            _fp.light.intensity = 10.0;
-            _fp.light.visible = true;
-            _fp.inUse = true;
-            _fp.age = 0;
-            _fp.duration = 0.5;
-            break;
-          }
-        }
+        // 弾丸消去
+        scene.remove(b.mesh);
+        _releaseBeamLight(b.poolEntry);
+        activeBeams.splice(bi, 1);
+        // ロック開始（テザー捕獲フェーズへ）
+        _lockCreature(itc);
+        hitOccurred = true;
+        break;
       }
     }
-    if (b.age > 2.5 || b.mesh.material.opacity <= 0) {
+    if (hitOccurred) continue;
+
+    // タイムアウト or 透明になったら消去
+    if (b.age > 2.2 || b.mesh.material.opacity <= 0) {
       scene.remove(b.mesh);
       _releaseBeamLight(b.poolEntry);
       activeBeams.splice(bi, 1);
     }
   }
+
+  // ── テザー引き寄せフェーズ更新 ──
+  updateLockedCreatures(dt);
 
   // Check proximity to interactables
   for (var i = 0; i < roomInteractables.length; i++) {
