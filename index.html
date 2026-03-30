@@ -355,13 +355,14 @@ canvas.locked{cursor:none}
 <div id="collection-overlay">
   <div id="collection-header">
     <span id="collection-title">捕獲図鑑 — FIELD RECORD</span>
-    <span id="collection-count">0 / 20 発見済み</span>
+    <span id="collection-count">0 / 50 発見済み</span>
     <button id="collection-close">[ESC] 閉じる</button>
   </div>
   <div id="collection-grid"></div>
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="creatures.js"></script>
+<script src="creatures3D.js"></script>
 <script>
 'use strict';
 /* globals THREE */
@@ -2993,303 +2994,6 @@ function buildMemoNote(R2) {
 }
 
 // ============================================================
-//  MYSTERIOUS CREATURE
-// ============================================================
-function buildCreature(R2) {
-  var g = new THREE.Group();
-  // Cloth-draped undefined form
-  var bodyH = 1.5 + R2() * 0.4;
-  var clothCol = R2() > 0.5 ? 0xe8e4dc : 0xd0ccc4;
-  var clothMat = matStd(clothCol, 0.95, 0.0);
-
-  // Inner form (unseen body)
-  var inner = mkMesh(new THREE.SphereGeometry(0.28, 10, 8),
-    matStd(0x111111, 1.0, 0.0));
-  inner.position.y = bodyH * 0.62; g.add(inner);
-
-  // Main cloth drape — irregular blob shape
-  var drape = mkMesh(new THREE.SphereGeometry(0.35, 12, 10), clothMat.clone());
-  drape.scale.set(1.0, 1.4, 0.88); drape.position.y = bodyH * 0.62; g.add(drape);
-
-  // Cloth cascading down — multiple elongated pieces
-  var nFolds = 5 + Math.floor(R2() * 4);
-  for (var fi = 0; fi < nFolds; fi++) {
-    var angle = (fi / nFolds) * Math.PI * 2 + R2() * 0.5;
-    var foldH = bodyH * (0.55 + R2() * 0.4);
-    var foldW = 0.18 + R2() * 0.14;
-    var fold = mkMesh(new THREE.BoxGeometry(foldW, foldH, foldW * 0.5),
-      clothMat.clone());
-    var fr = 0.12 + R2() * 0.1;
-    fold.position.set(Math.cos(angle)*fr, foldH/2, Math.sin(angle)*fr);
-    fold.rotation.y = angle + R2() * 0.4;
-    fold.rotation.z = (R2()-0.5)*0.18;
-    g.add(fold);
-  }
-
-  // Pointed top
-  var top = mkMesh(new THREE.CylinderGeometry(0.02, 0.25, bodyH*0.25, 10), clothMat.clone());
-  top.position.y = bodyH * 0.78 + bodyH * 0.12; g.add(top);
-
-  // Two glowing eyes deep inside cloth
-  var eyeGeo = new THREE.SphereGeometry(0.028, 8, 6);
-  var eyeColOptions = [0xff4444, 0xffcc00, 0x44ffcc, 0xff44ff, 0xffffff];
-  var eyeCol = eyeColOptions[Math.floor(R2() * eyeColOptions.length)];
-  var eyeMat = new THREE.MeshStandardMaterial({
-    color: eyeCol, emissive: new THREE.Color(eyeCol),
-    emissiveIntensity: 6.0
-  });
-  var eyeL = new THREE.Mesh(eyeGeo, eyeMat);
-  var eyeR = new THREE.Mesh(eyeGeo, eyeMat.clone());
-  eyeL.position.set(-0.08, bodyH * 0.68, 0.22); g.add(eyeL);
-  eyeR.position.set( 0.08, bodyH * 0.68, 0.22); g.add(eyeR);
-  var eyePl = new THREE.PointLight(eyeCol, 1.2, 2.5, 2.0);
-  eyePl.position.set(0, bodyH * 0.68, 0.3); g.add(eyePl);
-
-  // Store metadata for animation + hit detection
-  g.userData.isCreature = true;
-  g.userData.bodyH = bodyH;
-  g.userData.eyePl = eyePl;
-  g.userData.baseY = 0;
-  g.userData.phase = R2() * Math.PI * 2;
-  // Wander AI
-  g.userData.wanderTarget = new THREE.Vector3(0, 0, 0);
-  g.userData.wanderSpeed  = 0.008 + R2() * 0.005;   // very slow creep
-  g.userData.wanderTimer  = 2.0 + R2() * 4.0;        // seconds until first move
-  g.userData.wanderFacing = 0;
-
-  var shd = makeDropShadow(0.42, 0.42, 0.72);
-  g.add(shd);
-  return g;
-}
-
-// ============================================================
-//  INSECT CREATURES
-// ============================================================
-function buildInsect(R2, forcedType) {
-  var g = new THREE.Group();
-  var type = (forcedType !== undefined) ? forcedType : Math.floor(R2() * 4);
-  var s = 0.55 + R2() * 0.45;
-  var legMeshes = [];
-  var eyeMeshes = [];
-  var eyeEmissiveBase = 7.5 + R2() * 2.5;
-  var eyeMatGlow = new THREE.MeshStandardMaterial({
-    color: 0xff2a2a,
-    emissive: new THREE.Color(0xff0000),
-    emissiveIntensity: eyeEmissiveBase,
-    roughness: 0.12,
-    metalness: 0.25
-  });
-
-  // Object-like unrealistic colour palette (white/off-white/pale/ceramic/marble)
-  var OBJ_COLS = [
-    0xf8f4ee, // warm white
-    0xfafafa, // pure white
-    0xe8e4dc, // off-white
-    0xd4d0cc, // pale grey
-    0xc8c4c0, // cool grey
-    0xf0ece4, // ivory
-    0xe4dcd4, // linen
-    0x0c0c0a, // near-black
-    0x1a1816  // dark charcoal
-  ];
-  function rndObjCol() { return OBJ_COLS[Math.floor(R2() * OBJ_COLS.length)]; }
-  var colMain = rndObjCol();
-  var colDark = R2() > 0.5 ? 0x0c0c0a : OBJ_COLS[Math.floor(R2()*(OBJ_COLS.length-2)+2)];
-
-  // Future organism materials (abstract / stylish)
-  var shellMat = matStd(colMain, 0.12 + R2() * 0.22, 0.45 + R2() * 0.35);
-  var darkMat  = matStd(colDark, 0.18 + R2() * 0.22, 0.35 + R2() * 0.35);
-  var glassMat = new THREE.MeshStandardMaterial({
-    color: colMain,
-    roughness: 0.06,
-    metalness: 0.08,
-    transparent: true,
-    opacity: 0.58 + R2() * 0.22
-  });
-  var accentCols = [0x00ffdd, 0xff0066, 0xffee00, 0x0088ff, 0xcc00ff, 0x00ff88];
-  var accent = accentCols[Math.floor(R2() * accentCols.length)];
-  var accentMat = new THREE.MeshStandardMaterial({
-    color: accent,
-    emissive: new THREE.Color(accent),
-    emissiveIntensity: 2.2 + R2() * 1.6,
-    roughness: 0.16,
-    metalness: 0.22
-  });
-
-  // Abstract tendrils (driven by leg animation system)
-  function addTendril(angle, radius, len, thickness, phaseOffset) {
-    var lg = new THREE.Group();
-    lg.position.set(Math.cos(angle) * radius, 0.12 * s, Math.sin(angle) * radius);
-    lg.rotation.y = angle + Math.PI / 2;
-    // 2-segment tendril so rotation.x reads well
-    var seg1 = mkMesh(new THREE.BoxGeometry(thickness, len * 0.55, thickness * 0.8), darkMat.clone());
-    seg1.position.set(0, -len * 0.18, 0);
-    seg1.rotation.z = (R2() - 0.5) * 0.55;
-    lg.add(seg1);
-    var seg2 = mkMesh(new THREE.BoxGeometry(thickness * 0.85, len * 0.55, thickness * 0.65), shellMat.clone());
-    seg2.position.set(0, -len * 0.60, 0.06 * s);
-    seg2.rotation.z = (R2() - 0.5) * 0.75;
-    lg.add(seg2);
-    // Tip shard
-    var tip = mkMesh(new THREE.BoxGeometry(thickness * 1.2, thickness * 0.55, thickness * 0.25), accentMat.clone());
-    tip.position.set(0, -len * 0.88, 0.04 * s);
-    lg.add(tip);
-
-    lg.userData.legPhaseOffset = phaseOffset;
-    legMeshes.push(lg);
-    g.add(lg);
-  }
-
-  function addEyesCluster(y, z, count, spread) {
-    var em = eyeMatGlow.clone();
-    for (var i = 0; i < count; i++) {
-      var ex = (R2() - 0.5) * spread;
-      var ey = y + (R2() - 0.5) * spread * 0.5;
-      var ez = z + (R2() - 0.5) * spread * 0.4;
-      var e = mkMesh(new THREE.SphereGeometry((0.03 + R2() * 0.028) * s, 10, 8), em);
-      e.position.set(ex, ey, ez);
-      g.add(e);
-      eyeMeshes.push(e);
-    }
-  }
-
-  // 4 variants: all non-insect-like silhouettes
-  var coreY = (0.30 + R2() * 0.16) * s;
-  var coreR = (0.18 + R2() * 0.22) * s;
-  var baseRadius = (0.22 + R2() * 0.18) * s;
-
-  if (type === 0) {
-    // Variant A: faceted core + orbit ring + 6 tendrils
-    var core = mkMesh(new THREE.IcosahedronGeometry(coreR, 0), shellMat);
-    core.position.y = coreY;
-    core.rotation.set(R2() * 1.2, R2() * 1.2, R2() * 1.2);
-    g.add(core);
-
-    var ring = mkMesh(new THREE.TorusGeometry(coreR * 1.05, coreR * 0.10, 10, 48), accentMat.clone());
-    ring.position.y = coreY;
-    ring.rotation.x = Math.PI / 2 + (R2() - 0.5) * 0.35;
-    ring.rotation.y = (R2() - 0.5) * 0.6;
-    g.add(ring);
-
-    addEyesCluster(coreY + 0.02 * s, -coreR * 0.9, 2 + Math.floor(R2() * 2), 0.18 * s);
-
-    for (var i = 0; i < 6; i++) {
-      var a = (i / 6) * Math.PI * 2 + (R2() - 0.5) * 0.25;
-      addTendril(a, baseRadius, (0.55 + R2() * 0.35) * s, 0.05 * s, i * (Math.PI / 3));
-    }
-
-  } else if (type === 1) {
-    // Variant B: translucent capsule + spine fins + 8 tendrils
-    var cap = mkMesh(new THREE.SphereGeometry(coreR * 1.15, 14, 10), glassMat);
-    cap.scale.set(1.2, 0.7, 1.4);
-    cap.position.y = coreY + 0.02 * s;
-    g.add(cap);
-
-    var spineN = 5 + Math.floor(R2() * 4);
-    for (var si = 0; si < spineN; si++) {
-      var t = si / Math.max(1, spineN - 1);
-      var finW = (0.08 + R2() * 0.06) * s;
-      var finH = (0.18 + R2() * 0.22) * s;
-      var fin = mkMesh(new THREE.BoxGeometry(finW, finH, 0.015 * s), accentMat.clone());
-      fin.position.set((R2() - 0.5) * 0.06 * s, coreY + finH * 0.25, (t - 0.5) * coreR * 2.4);
-      fin.rotation.y = (R2() - 0.5) * 0.6;
-      fin.rotation.x = (R2() - 0.5) * 0.4;
-      g.add(fin);
-    }
-
-    addEyesCluster(coreY + 0.04 * s, -coreR * 0.85, 3 + Math.floor(R2() * 2), 0.22 * s);
-
-    for (var j = 0; j < 8; j++) {
-      var a2 = (j / 8) * Math.PI * 2 + (R2() - 0.5) * 0.3;
-      addTendril(a2, baseRadius * 1.05, (0.50 + R2() * 0.45) * s, 0.045 * s, j * (Math.PI / 4));
-    }
-
-  } else if (type === 2) {
-    // Variant C: stacked polyhedra + shard halo + 6 tendrils (longer)
-    var c1 = mkMesh(new THREE.OctahedronGeometry(coreR * 0.9, 0), shellMat.clone());
-    c1.position.y = coreY;
-    c1.rotation.set(R2(), R2(), R2());
-    g.add(c1);
-    var c2 = mkMesh(new THREE.TetrahedronGeometry(coreR * 0.55, 0), darkMat.clone());
-    c2.position.y = coreY + coreR * 0.65;
-    c2.rotation.set(R2(), R2(), R2());
-    g.add(c2);
-
-    var shardN = 10 + Math.floor(R2() * 10);
-    for (var sh = 0; sh < shardN; sh++) {
-      var aa = (sh / shardN) * Math.PI * 2;
-      var rad = coreR * (1.10 + R2() * 0.55);
-      var shard = mkMesh(new THREE.BoxGeometry(coreR * 0.38, coreR * 0.06, coreR * 0.06), accentMat.clone());
-      shard.position.set(Math.cos(aa) * rad, coreY + (R2() - 0.5) * coreR * 0.35, Math.sin(aa) * rad);
-      shard.rotation.y = aa + Math.PI / 2;
-      shard.rotation.x = (R2() - 0.5) * 0.8;
-      g.add(shard);
-    }
-
-    addEyesCluster(coreY + 0.03 * s, -coreR * 0.75, 2, 0.16 * s);
-
-    for (var k = 0; k < 6; k++) {
-      var a3 = (k / 6) * Math.PI * 2 + (R2() - 0.5) * 0.2;
-      addTendril(a3, baseRadius * 0.95, (0.72 + R2() * 0.55) * s, 0.05 * s, k * (Math.PI / 3));
-    }
-
-  } else {
-    // Variant D: "crown" ring + central void + 10 tendrils (dense)
-    var crown = mkMesh(new THREE.TorusGeometry(coreR * 1.25, coreR * 0.12, 10, 52), accentMat.clone());
-    crown.position.y = coreY + coreR * 0.15;
-    crown.rotation.x = (R2() - 0.5) * 0.7;
-    crown.rotation.z = (R2() - 0.5) * 0.7;
-    g.add(crown);
-
-    var voidCore = mkMesh(new THREE.SphereGeometry(coreR * 0.62, 12, 10), darkMat.clone());
-    voidCore.position.y = coreY;
-    g.add(voidCore);
-
-    // Small satellites
-    var satN = 4 + Math.floor(R2() * 4);
-    for (var st = 0; st < satN; st++) {
-      var a4 = (st / satN) * Math.PI * 2 + (R2() - 0.5) * 0.4;
-      var sat = mkMesh(new THREE.OctahedronGeometry(coreR * 0.18, 0), shellMat.clone());
-      sat.position.set(Math.cos(a4) * coreR * 1.35, coreY + (R2() - 0.5) * coreR * 0.35, Math.sin(a4) * coreR * 1.35);
-      sat.rotation.set(R2(), R2(), R2());
-      g.add(sat);
-    }
-
-    addEyesCluster(coreY + 0.04 * s, -coreR * 0.70, 4 + Math.floor(R2() * 2), 0.26 * s);
-
-    var tendN = 10;
-    for (var t2 = 0; t2 < tendN; t2++) {
-      var a5 = (t2 / tendN) * Math.PI * 2 + (R2() - 0.5) * 0.22;
-      addTendril(a5, baseRadius * 1.10, (0.48 + R2() * 0.40) * s, 0.042 * s, t2 * (Math.PI / 5));
-    }
-  }
-
-  // Shadow
-  var shd = makeDropShadow(0.48*s, 0.48*s, 0.72);
-  g.add(shd);
-
-  // Metadata for animation
-  g.userData.isCreature    = true;
-  g.userData.isInsect      = true;
-  g.userData.insectType    = type;
-  g.userData.insectScale   = s;
-  g.userData.bodyH         = 0.62*s;
-  g.userData.phase         = Math.random()*Math.PI*2;
-  g.userData.baseY         = 0;
-  g.userData.legMeshes     = legMeshes;
-  g.userData.wanderTarget  = new THREE.Vector3(0,0,0);
-  g.userData.wanderSpeed   = 0.014 + Math.random()*0.008;
-  g.userData.alertSpeed    = 0.038 + Math.random()*0.018;
-  g.userData.wanderTimer   = 1.0 + Math.random()*3.0;
-  g.userData.wanderFacing  = 0;
-  g.userData.isAlert       = false;
-  g.userData.eyeMeshes = eyeMeshes;
-  g.userData.eyeEmissiveBase = eyeEmissiveBase;
-
-  return g;
-}
-
-// ============================================================
 //  INTERACTABLE SYSTEM
 // ============================================================
 var roomInteractables = [];  // { type, worldPos, data, mesh, alive }
@@ -3513,6 +3217,39 @@ function updateInteractables(dt) {
             ud.isAlert = false;
           }
           // no stinger glow
+        }
+
+        // ---- Crystal: コア回転 + 発光パルス ----
+        if (ud.isCrystal) {
+          if (ud.coreRef) {
+            ud.coreRef.rotation.y = ud.phase * 0.8;
+            ud.coreRef.rotation.z = Math.sin(ud.phase * 0.55) * 0.35;
+          }
+          if (ud.eyePl) {
+            ud.eyePl.intensity = 1.8 + Math.sin(ud.phase * 4.2) * 0.9;
+          }
+        }
+
+        // ---- Blob: 呼吸スケール + 内核グロウ ----
+        if (ud.isBlob) {
+          if (ud.mainBlobRef) {
+            var bScl = 1.0 + Math.sin(ud.phase * 2.1) * 0.07;
+            ud.mainBlobRef.scale.y = bScl;
+            ud.mainBlobRef.scale.x = 1.0 - (bScl - 1.0) * 0.5;
+          }
+          if (ud.innerRef && ud.innerRef.material) {
+            ud.innerRef.material.emissiveIntensity = 2.8 + Math.sin(ud.phase * 5.0) * 1.6;
+          }
+          if (ud.eyePl) {
+            ud.eyePl.intensity = 1.5 + Math.sin(ud.phase * 3.7) * 0.7;
+          }
+        }
+
+        // ---- Wire: ノードフリッカー ----
+        if (ud.isWire) {
+          if (ud.eyePl) {
+            ud.eyePl.intensity = 1.2 + Math.abs(Math.sin(ud.phase * 6.0)) * 1.8;
+          }
         }
 
         // Wander toward target
@@ -4803,13 +4540,7 @@ function buildRoom(seed) {
   if (R2() < 0.15) {
     var crId = Math.floor(R2() * CREATURE_DATA.length);
     var crDef = CREATURE_DATA[crId];
-    var crMesh;
-    if (crDef.visualType === 'cloth') {
-      crMesh = buildCreature(R2);
-    } else {
-      var crInsType = parseInt(crDef.visualType.replace('insect',''));
-      crMesh = buildInsect(R2, crInsType);
-    }
+    var crMesh = buildCreature3D(crDef.visualType, R2);
     var crX = (R2()-0.5)*Math.max(2, W-6);
     var crZ = (R2()-0.5)*Math.max(2, D-6);
     crMesh.position.set(crX, 0, crZ);
@@ -4828,13 +4559,7 @@ function buildRoom(seed) {
     for (var ii=0; ii<insectCount; ii++) {
       var insId = Math.floor(R2() * CREATURE_DATA.length);
       var insDef = CREATURE_DATA[insId];
-      var insMesh;
-      if (insDef.visualType === 'cloth') {
-        insMesh = buildCreature(R2);
-      } else {
-        var insVisType = parseInt(insDef.visualType.replace('insect',''));
-        insMesh = buildInsect(R2, insVisType);
-      }
+      var insMesh = buildCreature3D(insDef.visualType, R2);
       var insX = (R2()-0.5)*Math.max(2, W-4);
       var insZ = (R2()-0.5)*Math.max(2, D-4);
       insMesh.position.set(insX, 0, insZ);
