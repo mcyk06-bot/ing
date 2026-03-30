@@ -3033,12 +3033,21 @@ var _beamMat = new THREE.MeshStandardMaterial({
 });
 // ライトプール（最大4発同時）
 var _beamLightPool = [];
+// フラッシュライトプール（命中エフェクト用 — scene.add/removeを避けるため事前生成）
+var _flashLightPool = [];
 (function() {
   for (var _i = 0; _i < 4; _i++) {
     var _l = new THREE.PointLight(0x00ccff, 0, 4.0, 2.0);
     _l.visible = false;
     scene.add(_l);
     _beamLightPool.push({ light: _l, inUse: false });
+  }
+  // フラッシュ用ライトも事前にシーンへ追加（ライト数変動によるシェーダー再コンパイルを防止）
+  for (var _j = 0; _j < 4; _j++) {
+    var _fl = new THREE.PointLight(0x00ccff, 0, 6.0, 2.0);
+    _fl.visible = false;
+    scene.add(_fl);
+    _flashLightPool.push({ light: _fl, age: 0, duration: 0, inUse: false });
   }
 })();
 
@@ -3109,10 +3118,19 @@ function updateInteractables(dt) {
         updateCollection(capturedId);
         showCaptureNotification(capturedId);
         startFadeCapture(itc.mesh);
-        var flash = new THREE.PointLight(0x00ccff, 10.0, 6.0, 2.0);
-        flash.position.copy(itc.pos);
-        scene.add(flash);
-        setTimeout(function() { scene.remove(flash); }, 500);
+        // フラッシュライトをプールから取得（scene.add/removeなし→シェーダー再コンパイルなし）
+        for (var _fi = 0; _fi < _flashLightPool.length; _fi++) {
+          if (!_flashLightPool[_fi].inUse) {
+            var _fp = _flashLightPool[_fi];
+            _fp.light.position.copy(itc.pos);
+            _fp.light.intensity = 10.0;
+            _fp.light.visible = true;
+            _fp.inUse = true;
+            _fp.age = 0;
+            _fp.duration = 0.5;
+            break;
+          }
+        }
       }
     }
     if (b.age > 2.5 || b.mesh.material.opacity <= 0) {
@@ -5033,6 +5051,19 @@ function animate() {
   updateInteractables(dt);
   updateWaterSurfaces(dt);
   updateFadingCreatures(dt);
+  // フラッシュライトプール更新
+  for (var _fli = 0; _fli < _flashLightPool.length; _fli++) {
+    var _fle = _flashLightPool[_fli];
+    if (!_fle.inUse) continue;
+    _fle.age += dt;
+    var _ft = Math.min(1, _fle.age / _fle.duration);
+    _fle.light.intensity = 10.0 * (1 - _ft);
+    if (_ft >= 1) {
+      _fle.light.intensity = 0;
+      _fle.light.visible = false;
+      _fle.inUse = false;
+    }
+  }
 }
 
 /* loading done */
